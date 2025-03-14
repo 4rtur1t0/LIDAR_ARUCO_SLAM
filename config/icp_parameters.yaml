@@ -1,0 +1,22 @@
+down_sample:
+  voxel_size: null # Number or null
+
+filter_by_radius:
+  max_radius: 35 #100
+  min_radius: 0.5  #0.5 para no encontrarse con el robot
+
+filter_by_height:
+  min_height: -1.0
+  max_height: 50.0
+
+filter_ground_plane:
+  radius_normals: 3
+  maximum_neighbors: 300 #200
+
+normals:
+  maximum_neighbors: 300 #50
+  radius_normals: 3 #0.5
+
+icp:
+  # find the closest points within this distance
+  distance_threshold: 10.0 #5
