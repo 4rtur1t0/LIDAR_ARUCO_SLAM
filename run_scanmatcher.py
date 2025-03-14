@@ -16,6 +16,7 @@ import getopt
 import sys
 from artelib.euler import Euler
 import yaml
+import bisect
 
 def find_options():
     argv = sys.argv[1:]
@@ -126,6 +127,9 @@ def prepare_experiment_data(euroc_read, start_index=20, delta_time=1.0):
     return scan_times, odo_times, gps_times, df_odo, df_gps
 
 
+
+
+
 def scanmatcher(directory=None):
     """
     The script samples LiDAR data from a starting index.
@@ -144,12 +148,13 @@ def scanmatcher(directory=None):
     ################################################################################################
     if directory is None:
         # INDOOR
-        directory = '/media/arvc/INTENSO/DATASETS/test_arucos/test_arucos_asl'
+       # directory = '/media/arvc/INTENSO/DATASETS/test_arucos/test_arucos_asl'
+        directory = '/home/arturo/Escritorio/test_arucos_asl'
 
     # create scan Array,
     lidarobs = LiDARScanArray(directory=directory)
     lidarobs.init()
-    lidar_time = lidarobs.get_time(10)
+    lidar_time = lidarobs.get_time(100)
     # lidarobs.load_pointclouds()
     # lidarobs.draw_all_clouds()
     # lidarobs.load_pointcloud(100)
@@ -160,10 +165,13 @@ def scanmatcher(directory=None):
     odoobsarray = PosesArray(directory=directory)
     odoobsarray.init()
     odo = odoobsarray.get(0)
-    odotime = odoobsarray.get_time(14)
-    odo1 = odoobsarray.get_closest_at_time(timestamp=lidar_time)
+    odo_time_i = odoobsarray.get_time(14)
+    odo1, odo_time = odoobsarray.get_closest_at_time(timestamp=lidar_time)
+    print('lidar_time-odo_time (s)', (odo_time-lidar_time)/1e9)
+    # interpolate an observation from two nearest observations.
+    odoobs = odoobsarray.interpolated_pose_at_time(timestamp=lidar_time)
 
-    # odoobs = PosesArray.interp_at_time(t=lidar_time)
+
 
     # GPS observations
     # gpsobsarray = GPSArray(directory=directory)

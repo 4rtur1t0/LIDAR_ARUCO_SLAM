@@ -12,8 +12,12 @@ from artelib import euler, rotationmatrix, homogeneousmatrix
 
 
 class Quaternion():
-    def __init__(self, array):
-        self.array = np.array(array)
+    def __init__(self, qx, qy, qz, qw):
+       # self.array = np.array(array)
+        self.qx = qx
+        self.qy = qy
+        self.qz = qz
+        self.qw = qw
 
     def R(self):
         return rotationmatrix.RotationMatrix(quaternion2rot(self.array))
@@ -31,51 +35,59 @@ class Quaternion():
         return self
 
     def __str__(self):
-        return str(self.array)
+        return str([self.qx, self.qy, self.qz, self.qw])
 
-    def __getitem__(self, item):
-        return self.array[item[0]]
+    #def __getitem__(self, item):
+    #    return self.array[item[0]]
 
     def toarray(self):
-        return self.array
+        return np.array([self.qx, self.qy, self.qz, self.qw])
 
     def __add__(self, Q):
-        return Quaternion(self.array + Q.toarray())
+        return Quaternion(qx=self.qx + Q.qx,
+                          qy=self.qy + Q.qy,
+                          qz=self.qz + Q.qz,
+                          qw=self.qw + Q.qw)
 
     def __sub__(self, Q):
-        return Quaternion(self.array - Q.toarray())
+        return Quaternion(qx=self.qx - Q.qx,
+                          qy=self.qy - Q.qy,
+                          qz=self.qz - Q.qz,
+                          qw=self.qw - Q.qw)
 
     def dot(self, Q):
         """
         quaternion dot product
         """
-        return np.dot(self.array, Q.toarray())
+        s = self.qx * Q.qx + self.qy * Q.qy + self.qz * Q.qz + self.qw * Q.qw
+        return s
 
     def qconj(self):
         """
         quaternion conjugate
         """
-        q0 = self.array[0]
-        qv = -self.array[1:4]
-        return Quaternion(np.hstack(([q0], qv)))
+        return Quaternion(qx=-self.qx,
+                          qy=-self.qy,
+                          qz=-self.qz,
+                          qw=self.qw)
 
     def __mul__(self, Q):
         """
         quaternion product
         """
         if isinstance(Q, Quaternion):
-            q1 = self.array
-            q2 = Q.toarray()
-            e0 = q1[0]*q2[0]-np.dot(q1[1:4], q2[1:4])
-            e1 = np.dot(q1[0], q2[1:4]) + np.dot(q2[0], q1[1:4]) + np.cross(q1[1:4], q2[1:4])
-            q = np.hstack(([e0], e1))
-            return Quaternion(q)
+            s1 = self.qw
+            s2 = Q.qw
+            v1 = np.array([self.qx, self.qy, self.qz])
+            v2 = np.array([Q.qx, Q.qy, Q.qz])
+            qw = s1*s2-np.dot(v1, v2)
+            qv = s1*v2 + s2*v1 + np.cross(v1, v2)
+            return Quaternion(qx=qv[0], qy=qv[1], qz=qv[2], qw=qw)
         # this assumes that the rightmost element is a float
         elif isinstance(Q, int) or isinstance(Q, float):
             s = Q # scalar
-            # q = self.array
-            q = np.dot(s, self.array)
-            return Quaternion(q)
+            q = np.dot(s, [self.qx, self.qy, self.qz, self.qw])
+            return Quaternion(qx=q[0], qy=q[1], qz=q[2], qw=q[3])
         else:
             raise Exception('Quaternion product does not support the leftmost operand')
 
@@ -83,5 +95,9 @@ class Quaternion():
         """
         Division of quaternion by constant
         """
-        q = self.array / Q
-        return Quaternion(q)
+        if isinstance(Q, int) or isinstance(Q, float):
+            s = Q # scalar
+            q = np.dot(1/s, [self.qx, self.qy, self.qz, self.qw])
+            return Quaternion(qx=q[0], qy=q[1], qz=[2], qw=[3])
+        else:
+            raise Exception('Quaternion division by scalar does not support the leftmost operand')
