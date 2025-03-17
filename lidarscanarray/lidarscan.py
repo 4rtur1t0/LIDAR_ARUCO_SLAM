@@ -1,11 +1,10 @@
 import time
-
 import numpy as np
-from artelib.euler import Euler
-from artelib.homogeneousmatrix import HomogeneousMatrix
+# from artelib.euler import Euler
+# from artelib.homogeneousmatrix import HomogeneousMatrix
 import open3d as o3d
 import copy
-from config import ICP_PARAMETERS
+# from config import ICP_PARAMETERS
 
 
 class LiDARScan():
@@ -15,14 +14,15 @@ class LiDARScan():
         self.scan_time = scan_time
         # the pointcloud
         self.pointcloud = None  # o3d.io.read_point_cloud(filename)
-        self.pointcloud_filtered = None
+        # self.pointcloud_filtered = None
         # voxel sizes
         self.voxel_size = parameters.get('voxel_size', None)
         self.voxel_size_normals = parameters.get('voxel_size_normals', None)
+        self.max_nn_estimate_normals = parameters.get('max_nn_estimate_normals', None)
         # filter
         self.min_reflectivity = parameters.get('min_reflectivity', None)
         self.min_radius = parameters.get('min_radius', None)
-        self.max_radius =parameters.get('max_radius', None)
+        self.max_radius = parameters.get('max_radius', None)
         self.min_height = parameters.get('min_height', None)
         self.max_height = parameters.get('max_height', None)
 
@@ -62,6 +62,11 @@ class LiDARScan():
         # Load the original complete pointcloud
         o3d.io.write_point_cloud(filename, self.pointcloud)
 
+    def filter_points(self):
+        self.down_sample()
+        self.filter_radius()
+        self.filter_height()
+
     def down_sample(self):
         if self.voxel_size is None:
             return
@@ -93,6 +98,11 @@ class LiDARScan():
         idx2 = np.where((z > min_height) & (z < max_height))
         return o3d.geometry.PointCloud(o3d.utility.Vector3dVector(points[idx2]))
 
+    def estimate_normals(self):
+        self.pointcloud.estimate_normals(
+             o3d.geometry.KDTreeSearchParamHybrid(radius=self.voxel_size_normals,
+                                                  max_nn=self.max_nn_estimate_normals))
+
     def draw_cloud(self):
         # o3d.visualization.draw_geometries([self.pointcloud],
         #                                   zoom=0.3412,
@@ -115,6 +125,66 @@ class LiDARScan():
         except KeyboardInterrupt:
             print("Interrupted by user")
         vis.destroy_window()
+
+    def draw_registration_result(self, other, transformation):
+        source_temp = copy.deepcopy(self.pointcloud)
+        target_temp = copy.deepcopy(other.pointcloud)
+        source_temp.paint_uniform_color([1, 0, 0])
+        target_temp.paint_uniform_color([0, 0, 1])
+        source_temp.transform(transformation)
+        # o3d.visualization.draw_geometries([source_temp, target_temp],
+        #                                   zoom=1.0,
+        #                                   front=[0, 0, 10],
+        #                                   lookat=[0, 0, 0],
+        #                                   up=[0, 0, 1])
+        o3d.visualization.draw_geometries([source_temp, target_temp])
+
+
+    def unload_pointcloud(self):
+        print('Removing pointclouds from memory (filtered, planes, fpfh): ')
+        del self.pointcloud
+        # del self.pointcloud_filtered
+        # del self.pointcloud_fpfh
+        # del self.pointcloud_ground_plane
+        # del self.pointcloud_non_ground_plane
+        self.pointcloud = None
+        # self.pointcloud_filtered = None
+        # self.pointcloud_ground_plane = None
+        # self.pointcloud_non_ground_plane = None
+        # self.pointcloud_fpfh = None
+
+    # def registration(self, other, initial_transform, option='pointpoint'):
+    #     """
+    #     use icp to compute transformation using an initial estimate.
+    #     caution, initial_transform is a np array.
+    #     """
+    #     if initial_transform is None:
+    #         initial_transform = np.eye(4)
+    #
+    #     print("Initial transformation. Viewing initial transform:")
+    #     # other.draw_registration_result(self, initial_transform)
+    #
+    #     print("Apply point-to-plane ICP. Local registration")
+    #     threshold = ICP_PARAMETERS.distance_threshold
+    #     # Initial version v1.0
+    #     # if option == 'pointpoint':
+    #     #     reg_p2p = o3d.pipelines.registration.registration_icp(
+    #     #         other.pointcloud_filtered, self.pointcloud_filtered, threshold, initial_transform,
+    #     #         o3d.pipelines.registration.TransformationEstimationPointToPoint())
+    #     # elif option == 'pointplane':
+    #
+    #     reg_p2p = o3d.pipelines.registration.registration_icp(
+    #                         other.pointcloud, self.pointcloud, threshold, initial_transform,
+    #                         o3d.pipelines.registration.TransformationEstimationPointToPlane())
+    #     # else:
+    #     #     print('UNKNOWN OPTION. Should be pointpoint or pointplane')
+    #     print('Registration result: ', reg_p2p)
+    #     # print("Transformation is:")
+    #     # print(reg_p2p.transformation)
+    #     # other.draw_registration_result(self, reg_p2p.transformation)
+    #     T = HomogeneousMatrix(reg_p2p.transformation)
+    #     return T
+
 
     # def save_pointcloud_as_mesh(self):
     #     https: // www.open3d.org / docs / release / tutorial / geometry / surface_reconstruction.html
@@ -279,36 +349,7 @@ class LiDARScan():
     #                                                  o3d.geometry.KDTreeSearchParamHybrid(radius=self.voxel_size_normals,
     #                                                                                        max_nn=100))
 
-    # def local_registration_simple(self, other, initial_transform, option='pointpoint'):
-    #     """
-    #     use icp to compute transformation using an initial estimate.
-    #     caution, initial_transform is a np array.
-    #     """
-    #     if initial_transform is None:
-    #         initial_transform = np.eye(4)
-    #
-    #     print("Initial transformation. Viewing initial:")
-    #     # other.draw_registration_result(self, initial_transform)
-    #
-    #     print("Apply point-to-plane ICP. Local registration")
-    #     threshold = ICP_PARAMETERS.distance_threshold
-    #     # Initial version v1.0
-    #     if option == 'pointpoint':
-    #         reg_p2p = o3d.pipelines.registration.registration_icp(
-    #             other.pointcloud_filtered, self.pointcloud_filtered, threshold, initial_transform,
-    #             o3d.pipelines.registration.TransformationEstimationPointToPoint())
-    #     elif option == 'pointplane':
-    #         reg_p2p = o3d.pipelines.registration.registration_icp(
-    #                         other.pointcloud_filtered, self.pointcloud_filtered, threshold, initial_transform,
-    #                         o3d.pipelines.registration.TransformationEstimationPointToPlane())
-    #     else:
-    #         print('UNKNOWN OPTION. Should be pointpoint or pointplane')
-    #     print('Registration result: ', reg_p2p)
-    #     # print("Transformation is:")
-    #     # print(reg_p2p.transformation)
-    #     # other.draw_registration_result(self, reg_p2p.transformation)
-    #     T = HomogeneousMatrix(reg_p2p.transformation)
-    #     return T
+
     #
     # def local_registration_two_planes(self, other, initial_transform):
     #     """

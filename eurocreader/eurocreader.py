@@ -56,11 +56,13 @@ class EurocReader():
             Ti = transforms[i]
             t = Ti.pos()
             q = Ti.Q()
-            data_list.append({'#timestamp [ns]': sensor_times[i],
+            data_list.append({'timestamp': sensor_times[i],
                          'x': t[0], 'y': t[1], 'z': t[2],
-                         'qx': q[1], 'qy': q[2], 'qz': q[3], 'qw': q[0]})
-        df = pd.DataFrame(data_list)
-        df.to_csv(self.directory+filename)
+                         'qx': q.qx, 'qy': q.qy, 'qz': q.qz, 'qw': q.qw})
+        df = pd.DataFrame(data_list, columns=['timestamp', 'x', 'y', 'z', 'qx', 'qy', 'qz', 'qw'])
+        df.to_csv(self.directory+filename, index=False, header=['#timestamp [ns]',
+                                   'x', 'y', 'z',
+                                   'qx', 'qy', 'qz', 'qw'])
         return df
 
     def save_sensor_times_as_csv(self, sensor_times, filename):

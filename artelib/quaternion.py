@@ -7,8 +7,8 @@ The Quaternion orientation class
 @Time: April 2021
 """
 import numpy as np
-from artelib.tools import quaternion2rot, q2euler
 from artelib import euler, rotationmatrix, homogeneousmatrix
+# from artelib import quaternion2rot, q2euler
 
 
 class Quaternion():
@@ -20,25 +20,22 @@ class Quaternion():
         self.qw = qw
 
     def R(self):
-        return rotationmatrix.RotationMatrix(quaternion2rot(self.array))
+        return rotationmatrix.RotationMatrix(self.quaternion2rot())
 
     def homogeneous(self):
         return homogeneousmatrix.HomogeneousMatrix(np.zeros(3), self.R())
 
-    def Euler(self):
+    def euler(self):
         """
         Convert Quaternion to Euler angles XYZ
         """
-        return euler.Euler(q2euler(self.array)[0]), euler.Euler(q2euler(self.array)[1])
+        return self.q2euler()
 
     def Q(self):
         return self
 
     def __str__(self):
         return str([self.qx, self.qy, self.qz, self.qw])
-
-    #def __getitem__(self, item):
-    #    return self.array[item[0]]
 
     def toarray(self):
         return np.array([self.qx, self.qy, self.qz, self.qw])
@@ -96,8 +93,31 @@ class Quaternion():
         Division of quaternion by constant
         """
         if isinstance(Q, int) or isinstance(Q, float):
-            s = Q # scalar
+            # scalar, consider the input Q as scalar
+            s = Q
             q = np.dot(1/s, [self.qx, self.qy, self.qz, self.qw])
             return Quaternion(qx=q[0], qy=q[1], qz=[2], qw=[3])
         else:
             raise Exception('Quaternion division by scalar does not support the leftmost operand')
+
+    def quaternion2rot(self):
+        qw = self.qw
+        qx = self.qx
+        qy = self.qy
+        qz = self.qz
+        R = np.eye(3)
+        R[0, 0] = 1 - 2 * qy ** 2 - 2 * qz ** 2
+        R[0, 1] = 2 * qx * qy - 2 * qz * qw
+        R[0, 2] = 2 * qx * qz + 2 * qy * qw
+        R[1, 0] = 2 * qx * qy + 2 * qz * qw
+        R[1, 1] = 1 - 2 * qx ** 2 - 2 * qz ** 2
+        R[1, 2] = 2 * qy * qz - 2 * qx * qw
+        R[2, 0] = 2 * qx * qz - 2 * qy * qw
+        R[2, 1] = 2 * qy * qz + 2 * qx * qw
+        R[2, 2] = 1 - 2 * qx ** 2 - 2 * qy ** 2
+        return R
+
+    def q2euler(self):
+        R = self.quaternion2rot()
+        e1, e2 = R.euler()
+        return e1, e2

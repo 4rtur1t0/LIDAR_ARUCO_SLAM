@@ -112,6 +112,44 @@ class GraphSLAM():
         elif noise_type == 'GPS':
             return self.GPS_NOISE
 
+    def plot2D(self, plot_uncertainty_ellipse=False, skip=1):
+        """Print and plot incremental progress of the robot for 3D Pose SLAM using iSAM2."""
+        # Compute the marginals for all states in the graph.
+        if plot_uncertainty_ellipse:
+            marginals = gtsam.Marginals(self.graph, self.current_estimate)
+
+        # Plot the newly updated iSAM2 inference.
+        fig = plt.figure(0)
+        i = 0
+        while self.current_estimate.exists(i):
+            if plot_uncertainty_ellipse:
+                gtsam_plot.plot_pose2(0, self.current_estimate.atPose3(i), 0.5,
+                                          marginals.marginalCovariance(i))
+            else:
+                gtsam_plot.plot_pose2(0, self.current_estimate.atPose3(i), 0.5, None)
+            i += np.max([skip, 1])
+        plt.pause(.01)
+
+    def plot3D(self, plot_uncertainty_ellipse=False, skip=1):
+        """Print and plot incremental progress of the robot for 3D Pose SLAM using iSAM2."""
+        # Compute the marginals for all states in the graph.
+        if plot_uncertainty_ellipse:
+            marginals = gtsam.Marginals(self.graph, self.current_estimate)
+
+        # Plot the newly updated iSAM2 inference.
+        fig = plt.figure(1)
+        axes = fig.gca(projection='3d')
+        plt.cla()
+        i = 0
+        while self.current_estimate.exists(i):
+            if plot_uncertainty_ellipse:
+                gtsam_plot.plot_pose3(0, self.current_estimate.atPose3(i), 0.5,
+                                                marginals.marginalCovariance(i))
+            else:
+                gtsam_plot.plot_pose3(0, self.current_estimate.atPose3(i), 0.5, None)
+            i += np.max([skip, 1])
+        plt.pause(.01)
+
     def plot(self, plot3D=True, plot_uncertainty_ellipse=True, skip=1):
         """Print and plot incremental progress of the robot for 3D Pose SLAM using iSAM2."""
         # Compute the marginals for all states in the graph.

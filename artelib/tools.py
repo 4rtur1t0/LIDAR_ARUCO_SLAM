@@ -6,16 +6,17 @@ A number of useful functions
 @Time: April 2021
 """
 import numpy as np
+from artelib import quaternion
 
 
-def buildT(position, orientation):
-    T = np.zeros((4, 4))
-    R = orientation.R()
-    R = R.toarray()
-    T[0:3, 0:3] = R
-    T[3, 3] = 1
-    T[0:3, 3] = np.array(position).T
-    return T
+# def buildT(position, orientation):
+#     T = np.zeros((4, 4))
+#     R = orientation.R()
+#     R = R.toarray()
+#     T[0:3, 0:3] = R
+#     T[3, 3] = 1
+#     T[0:3, 3] = np.array(position).T
+#     return T
 
 
 def normalize(q):
@@ -26,14 +27,14 @@ def normalize(q):
         return q
 
 
-def normalize_angle(eul):
-    """
-    Normalize angles in array to [-pi, pi]
-    """
-    e = []
-    for i in range(len(eul)):
-        e.append(np.arctan2(np.sin(eul[i]), np.cos(eul[i])))
-    return e
+# def normalize_angle(eul):
+#     """
+#     Normalize angles in array to [-pi, pi]
+#     """
+#     e = []
+#     for i in range(len(eul)):
+#         e.append(np.arctan2(np.sin(eul[i]), np.cos(eul[i])))
+#     return e
 
 
 def compute_w_between_orientations(orientation, targetorientation):
@@ -88,99 +89,101 @@ def compute_kinematic_errors(Tcurrent, Ttarget):
     e = np.hstack((e1, e2))
     return e, error_dist, error_orient
 
+#
+# def quaternion2rot(Q):
+#     qw = Q.qw
+#     qx = Q.qx
+#     qy = Q.qy
+#     qz = Q.qz
+#     R = np.eye(3)
+#     R[0, 0] = 1 - 2 * qy**2 - 2 * qz**2
+#     R[0, 1] = 2 * qx * qy - 2 * qz * qw
+#     R[0, 2] = 2 * qx * qz + 2 * qy * qw
+#     R[1, 0] = 2 * qx * qy + 2 * qz * qw
+#     R[1, 1] = 1 - 2*qx**2 - 2*qz**2
+#     R[1, 2] = 2 * qy * qz - 2 * qx * qw
+#     R[2, 0] = 2 * qx * qz - 2 * qy * qw
+#     R[2, 1] = 2 * qy * qz + 2 * qx * qw
+#     R[2, 2] = 1 - 2 * qx**2 - 2 * qy**2
+#     return R
 
-def quaternion2rot(Q):
-    qw = Q[0]
-    qx = Q[1]
-    qy = Q[2]
-    qz = Q[3]
-    R = np.eye(3)
-    R[0, 0] = 1 - 2 * qy**2 - 2 * qz**2
-    R[0, 1] = 2 * qx * qy - 2 * qz * qw
-    R[0, 2] = 2 * qx * qz + 2 * qy * qw
-    R[1, 0] = 2 * qx * qy + 2 * qz * qw
-    R[1, 1] = 1 - 2*qx**2 - 2*qz**2
-    R[1, 2] = 2 * qy * qz - 2 * qx * qw
-    R[2, 0] = 2 * qx * qz - 2 * qy * qw
-    R[2, 1] = 2 * qy * qz + 2 * qx * qw
-    R[2, 2] = 1 - 2 * qx**2 - 2 * qy**2
-    return R
-
-
-def rot2quaternion(R):
-    """
-    rot2quaternion(R)
-    Computes a quaternion Q from a rotation matrix R.
-
-    This implementation has been translated from The Robotics Toolbox for Matlab (Peter  Corke),
-    https://github.com/petercorke/spatial-math
-
-    CAUTION: R is a matrix with some noise due to floating point errors. For example, the determinant of R may no be
-    exactly = 1.0 always. As a result, given R and R_ (a close noisy matrix), the resulting quaternions Q and Q_ may
-    have a difference in their signs. This poses no problem, since the slerp formula considers the case in which
-    the distance cos(Q1*Q_) is negative and changes it sign (please, see slerp).
-
-    There are a number of techniques to retrieve the closest rotation matrix R given a noisy matrix R1.
-    In the method below, this consideration is not taken into account, however, the trace tr is considered always
-    positive. The resulting quaternion, as stated before, may have a difference in sign.
-
-    On Closed-Form Formulas for the 3D Nearest Rotation Matrix Problem. Soheil Sarabandi, Arya Shabani, Josep M. Porta and
-    Federico Thomas.
-
-    http://www.iri.upc.edu/files/scidoc/2288-On-Closed-Form-Formulas-for-the-3D-Nearest-Rotation-Matrix-Problem.pdf
-
-    """
-    R = R[0:3, 0:3]
-    tr = np.trace(R) + 1
-    # caution: tr should not be negative
-    tr = max(0.0, tr)
-    s = np.sqrt(tr) / 2.0
-    kx = R[2, 1] - R[1, 2] # Oz - Ay
-    ky = R[0, 2] - R[2, 0] # Ax - Nz
-    kz = R[1, 0] - R[0, 1] # Ny - Ox
-
-    # equation(7)
-    k = np.argmax(np.diag(R))
-    if k == 0: # Nx dominates
-        kx1 = R[0, 0] - R[1, 1] - R[2, 2] + 1 # Nx - Oy - Az + 1
-        ky1 = R[1, 0] + R[0, 1] # Ny + Ox
-        kz1 = R[2, 0] + R[0, 2]  # Nz + Ax
-        sgn = mod_sign(kx)
-    elif k == 1: # Oy dominates
-        kx1 = R[1, 0] + R[0, 1] # % Ny + Ox
-        ky1 = R[1, 1] - R[0, 0] - R[2, 2] + 1  # Oy - Nx - Az + 1
-        kz1 = R[2, 1] + R[1, 2] # % Oz + Ay
-        sgn = mod_sign(ky)
-    elif k == 2: # Az dominates
-        kx1 = R[2, 0] + R[0, 2] # Nz + Ax
-        ky1 = R[2, 1] + R[1, 2] # Oz + Ay
-        kz1 = R[2, 2] - R[0, 0] - R[1, 1] + 1 # Az - Nx - Oy + 1
-        # add = (kz >= 0)
-        sgn = mod_sign(kz)
-    # equation(8)
-    kx = kx + sgn * kx1
-    ky = ky + sgn * ky1
-    kz = kz + sgn * kz1
-
-    nm = np.linalg.norm([kx, ky, kz])
-    if nm == 0:
-        # handle special case of null quaternion
-        Q = np.array([1, 0, 0, 0])
-    else:
-        v = np.dot(np.sqrt(1 - s**2)/nm, np.array([kx, ky, kz])) # equation(10)
-        Q = np.hstack((s, v))
-    return Q
-
-
-def mod_sign(x):
-    """
-       modified  version of sign() function as per   the    paper
-        sign(x) = 1 if x >= 0
-    """
-    if x >= 0:
-        return 1
-    else:
-        return -1
+#
+# def rot2quaternion(R):
+#     """
+#     rot2quaternion(R)
+#     Computes a quaternion Q from a rotation matrix R.
+#
+#     This implementation has been translated from The Robotics Toolbox for Matlab (Peter  Corke),
+#     https://github.com/petercorke/spatial-math
+#
+#     CAUTION: R is a matrix with some noise due to floating point errors. For example, the determinant of R may no be
+#     exactly = 1.0 always. As a result, given R and R_ (a close noisy matrix), the resulting quaternions Q and Q_ may
+#     have a difference in their signs. This poses no problem, since the slerp formula considers the case in which
+#     the distance cos(Q1*Q_) is negative and changes it sign (please, see slerp).
+#
+#     There are a number of techniques to retrieve the closest rotation matrix R given a noisy matrix R1.
+#     In the method below, this consideration is not taken into account, however, the trace tr is considered always
+#     positive. The resulting quaternion, as stated before, may have a difference in sign.
+#
+#     On Closed-Form Formulas for the 3D Nearest Rotation Matrix Problem. Soheil Sarabandi, Arya Shabani, Josep M. Porta and
+#     Federico Thomas.
+#
+#     http://www.iri.upc.edu/files/scidoc/2288-On-Closed-Form-Formulas-for-the-3D-Nearest-Rotation-Matrix-Problem.pdf
+#
+#     """
+#     R = R[0:3, 0:3]
+#     tr = np.trace(R) + 1
+#     # caution: tr should not be negative
+#     tr = max(0.0, tr)
+#     s = np.sqrt(tr) / 2.0
+#     kx = R[2, 1] - R[1, 2] # Oz - Ay
+#     ky = R[0, 2] - R[2, 0] # Ax - Nz
+#     kz = R[1, 0] - R[0, 1] # Ny - Ox
+#
+#     # equation(7)
+#     k = np.argmax(np.diag(R))
+#     if k == 0: # Nx dominates
+#         kx1 = R[0, 0] - R[1, 1] - R[2, 2] + 1 # Nx - Oy - Az + 1
+#         ky1 = R[1, 0] + R[0, 1] # Ny + Ox
+#         kz1 = R[2, 0] + R[0, 2]  # Nz + Ax
+#         sgn = mod_sign(kx)
+#     elif k == 1: # Oy dominates
+#         kx1 = R[1, 0] + R[0, 1] # % Ny + Ox
+#         ky1 = R[1, 1] - R[0, 0] - R[2, 2] + 1  # Oy - Nx - Az + 1
+#         kz1 = R[2, 1] + R[1, 2] # % Oz + Ay
+#         sgn = mod_sign(ky)
+#     elif k == 2: # Az dominates
+#         kx1 = R[2, 0] + R[0, 2] # Nz + Ax
+#         ky1 = R[2, 1] + R[1, 2] # Oz + Ay
+#         kz1 = R[2, 2] - R[0, 0] - R[1, 1] + 1 # Az - Nx - Oy + 1
+#         # add = (kz >= 0)
+#         sgn = mod_sign(kz)
+#     # equation(8)
+#     kx = kx + sgn * kx1
+#     ky = ky + sgn * ky1
+#     kz = kz + sgn * kz1
+#
+#     nm = np.linalg.norm([kx, ky, kz])
+#     if nm == 0:
+#         # handle the special case of null quaternion
+#         # Q = np.array([1, 0, 0, 0])
+#         Q = quaternion.Quaternion(qw=1, qx=0, qy=0, qz=0)
+#     else:
+#         v = np.dot(np.sqrt(1 - s**2)/nm, np.array([kx, ky, kz])) # equation(10)
+#         # Q = np.hstack((s, v))
+#         Q = quaternion.Quaternion(qw=s, qx=v[0], qy=v[1], qz=v[2])
+#     return Q
+#
+#
+# def mod_sign(x):
+#     """
+#        modified  version of sign() function as per   the    paper
+#         sign(x) = 1 if x >= 0
+#     """
+#     if x >= 0:
+#         return 1
+#     else:
+#         return -1
 
 
 def angular_w_between_quaternions(Q0, Q1, total_time):
@@ -222,72 +225,72 @@ def qconj(q):
     Q = np.hstack((s, -v))
     return Q
 
+#
+# def euler2rot(abg):
+#     calpha = np.cos(abg[0])
+#     salpha = np.sin(abg[0])
+#     cbeta = np.cos(abg[1])
+#     sbeta = np.sin(abg[1])
+#     cgamma = np.cos(abg[2])
+#     sgamma = np.sin(abg[2])
+#     Rx = np.array([[1, 0, 0], [0, calpha, -salpha], [0, salpha, calpha]])
+#     Ry = np.array([[cbeta, 0, sbeta], [0, 1, 0], [-sbeta, 0, cbeta]])
+#     Rz = np.array([[cgamma, -sgamma, 0], [sgamma, cgamma, 0], [0, 0, 1]])
+#     R = np.matmul(Rx, Ry)
+#     R = np.matmul(R, Rz)
+#     return R
 
-def euler2rot(abg):
-    calpha = np.cos(abg[0])
-    salpha = np.sin(abg[0])
-    cbeta = np.cos(abg[1])
-    sbeta = np.sin(abg[1])
-    cgamma = np.cos(abg[2])
-    sgamma = np.sin(abg[2])
-    Rx = np.array([[1, 0, 0], [0, calpha, -salpha], [0, salpha, calpha]])
-    Ry = np.array([[cbeta, 0, sbeta], [0, 1, 0], [-sbeta, 0, cbeta]])
-    Rz = np.array([[cgamma, -sgamma, 0], [sgamma, cgamma, 0], [0, 0, 1]])
-    R = np.matmul(Rx, Ry)
-    R = np.matmul(R, Rz)
-    return R
+#
+# def rot2euler(R):
+#     """
+#     Conversion from the rotation matrix R to Euler angles.
+#     The XYZ convention in mobile axes is assumed.
+#     """
+#     th = np.abs(np.abs(R[0, 2])-1.0)
+#     R[0, 2] = min(R[0, 2], 1)
+#     R[0, 2] = max(R[0, 2], -1)
+#
+#     # caso no degenerado
+#     if th > 0.0001:
+#         beta1 = np.arcsin(R[0, 2])
+#         beta2 = np.pi - beta1
+#         s1 = np.sign(np.cos(beta1))
+#         s2 = np.sign(np.cos(beta2))
+#         alpha1 = np.arctan2(-s1*R[1][2], s1*R[2][2])
+#         gamma1 = np.arctan2(-s1*R[0][1], s1*R[0][0])
+#         alpha2 = np.arctan2(-s2*R[1][2], s2*R[2][2])
+#         gamma2 = np.arctan2(-s2*R[0][1], s2*R[0][0])
+#     # degenerate case
+#     else:
+#         print('CAUTION: rot2euler detected a degenerate solution when computing the Euler angles.')
+#         alpha1 = 0
+#         alpha2 = np.pi
+#         beta1 = np.arcsin(R[0, 2])
+#         if beta1 > 0:
+#             beta2 = np.pi/2
+#             gamma1 = np.arctan2(R[1][0], R[1][1])
+#             gamma2 = np.arctan2(R[1][0], R[1][1])-alpha2
+#         else:
+#             beta2 = -np.pi/2
+#             gamma1 = np.arctan2(-R[1][0], R[1][1])
+#             gamma2 = np.arctan2(-R[1][0], R[1][1])-alpha2
+#     # finally normalize to +-pi
+#     e1 = normalize_angle([alpha1, beta1, gamma1])
+#     e2 = normalize_angle([alpha2, beta2, gamma2])
+#     return e1, e2
+
+#
+#
+# def euler2q(abg):
+#     R = euler2rot(abg=abg)
+#     Q = rot2quaternion(R)
+#     return Q
 
 
-def rot2euler(R):
-    """
-    Conversion from the rotation matrix R to Euler angles.
-    The XYZ convention in mobile axes is assumed.
-    """
-    th = np.abs(np.abs(R[0, 2])-1.0)
-    R[0, 2] = min(R[0, 2], 1)
-    R[0, 2] = max(R[0, 2], -1)
-
-    # caso no degenerado
-    if th > 0.0001:
-        beta1 = np.arcsin(R[0, 2])
-        beta2 = np.pi - beta1
-        s1 = np.sign(np.cos(beta1))
-        s2 = np.sign(np.cos(beta2))
-        alpha1 = np.arctan2(-s1*R[1][2], s1*R[2][2])
-        gamma1 = np.arctan2(-s1*R[0][1], s1*R[0][0])
-        alpha2 = np.arctan2(-s2*R[1][2], s2*R[2][2])
-        gamma2 = np.arctan2(-s2*R[0][1], s2*R[0][0])
-    # degenerate case
-    else:
-        print('CAUTION: rot2euler detected a degenerate solution when computing the Euler angles.')
-        alpha1 = 0
-        alpha2 = np.pi
-        beta1 = np.arcsin(R[0, 2])
-        if beta1 > 0:
-            beta2 = np.pi/2
-            gamma1 = np.arctan2(R[1][0], R[1][1])
-            gamma2 = np.arctan2(R[1][0], R[1][1])-alpha2
-        else:
-            beta2 = -np.pi/2
-            gamma1 = np.arctan2(-R[1][0], R[1][1])
-            gamma2 = np.arctan2(-R[1][0], R[1][1])-alpha2
-    # finally normalize to +-pi
-    e1 = normalize_angle([alpha1, beta1, gamma1])
-    e2 = normalize_angle([alpha2, beta2, gamma2])
-    return e1, e2
-
-
-
-def euler2q(abg):
-    R = euler2rot(abg=abg)
-    Q = rot2quaternion(R)
-    return Q
-
-
-def q2euler(Q):
-    R = quaternion2rot(Q)
-    abg = rot2euler(R)
-    return abg
+# def q2euler(Q):
+#     R = quaternion2rot(Q)
+#     abg = rot2euler(R)
+#     return abg
 
 
 def slerp(Q1, Q2, t):

@@ -7,7 +7,7 @@ The HomogeneousMatrix class
 """
 import numpy as np
 # from artelib.euler import Euler
-from artelib.tools import rot2quaternion, buildT
+# from artelib.tools import rot2quaternion, buildT
 from artelib import quaternion, rotationmatrix, euler, vector
 import matplotlib.pyplot as plt
 
@@ -65,7 +65,9 @@ class HomogeneousMatrix():
         return HomogeneousMatrix(np.linalg.inv(self.array))
 
     def Q(self):
-        return quaternion.Quaternion(rot2quaternion(self.array))
+        R = self.R()
+        return R.rot2quaternion()
+        # return quaternion.Quaternion(rot2quaternion(self.array))
 
     def R(self):
         return rotationmatrix.RotationMatrix(self.array[0:3, 0:3])
@@ -146,6 +148,14 @@ class HomogeneousMatrix():
         plt.title(title)
         plt.show(block=block)
 
+def buildT(position, orientation):
+    T = np.zeros((4, 4))
+    R = orientation.R()
+    R = R.toarray()
+    T[0:3, 0:3] = R
+    T[3, 3] = 1
+    T[0:3, 3] = np.array(position).T
+    return T
 
 
 

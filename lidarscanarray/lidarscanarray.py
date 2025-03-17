@@ -26,10 +26,16 @@ class LiDARScanArray():
         # self.voxel_size = None
         self.parameters = None
 
-    def init(self):
-        self.read_parameters()
-        self.read_data()
-        self.add_lidar_scans()
+    # def init(self):
+    #     self.read_parameters()
+    #     self.read_data()
+    #     self.add_lidar_scans()
+
+    def __len__(self):
+        return len(self.scan_times)
+
+    def __getitem__(self, item):
+        return self.lidar_scans[item]
 
     def read_parameters(self):
         yaml_file_global = self.directory + '/' + 'robot0/scanmatcher_parameters.yaml'
@@ -48,9 +54,12 @@ class LiDARScanArray():
         euroc_read = EurocReader(directory=self.directory)
         df_lidar = euroc_read.read_csv(filename='/robot0/lidar/data.csv')
         scan_times = df_lidar['#timestamp [ns]'].to_numpy()
+        self.scan_times = scan_times
+
+    def sample_data(self):
         start_index = self.parameters.get('start_index', 0)
         delta_time = self.parameters.get('delta_time', None)
-        scan_times = sample_times(sensor_times=scan_times, start_index=start_index, delta_time=delta_time)
+        scan_times = sample_times(sensor_times=self.scan_times, start_index=start_index, delta_time=delta_time)
         self.scan_times = scan_times
 
     def get_time(self, index):
@@ -97,30 +106,37 @@ class LiDARScanArray():
     def pre_process(self, index):
         self.lidar_scans[index].pre_process(method=self.method)
 
-    def compute_transformation(self, i, j, Tij):
-        """
-        Compute relative transformation using different methods:
-        - Simple ICP.
-        - Two planes ICP.
-        - A global FPFH feature matching (which could be followed by a simple ICP)
-        """
-        # TODO: Compute inintial transformation from IMU
-        if self.method == 'icppointpoint':
-            transform = self.keyframes[i].local_registration_simple(self.keyframes[j], initial_transform=Tij.array,
-                                                                    option='pointpoint')
-        elif self.method == 'icppointplane':
-            transform = self.keyframes[i].local_registration_simple(self.keyframes[j], initial_transform=Tij.array,
-                                                                    option='pointplane')
-        elif self.method == 'icp2planes':
-            transform = self.keyframes[i].local_registration_two_planes(self.keyframes[j], initial_transform=Tij.array)
-        elif self.method == 'fpfh':
-            transform = self.keyframes[i].global_registration(self.keyframes[j])
-        else:
-            print('Unknown registration method')
-            transform = None
-        if self.show_registration_result:
-            self.keyframes[j].draw_registration_result(self.keyframes[i], transformation=transform.array)
-        return transform
+    def filter_points(self, index):
+        self.lidar_scans[index].filter_points()
+
+    def estimate_normals(self, index):
+        self.lidar_scans[index].estimate_normals()
+
+
+    # def compute_transformation(self, i, j, Tij):
+    #     """
+    #     Compute relative transformation using different methods:
+    #     - Simple ICP.
+    #     - Two planes ICP.
+    #     - A global FPFH feature matching (which could be followed by a simple ICP)
+    #     """
+    #     # TODO: Compute inintial transformation from IMU
+    #     if self.method == 'icppointpoint':
+    #         transform = self.keyframes[i].local_registration_simple(self.keyframes[j], initial_transform=Tij.array,
+    #                                                                 option='pointpoint')
+    #     elif self.method == 'icppointplane':
+    #         transform = self.keyframes[i].local_registration_simple(self.keyframes[j], initial_transform=Tij.array,
+    #                                                                 option='pointplane')
+    #     elif self.method == 'icp2planes':
+    #         transform = self.keyframes[i].local_registration_two_planes(self.keyframes[j], initial_transform=Tij.array)
+    #     elif self.method == 'fpfh':
+    #         transform = self.keyframes[i].global_registration(self.keyframes[j])
+    #     else:
+    #         print('Unknown registration method')
+    #         transform = None
+    #     if self.show_registration_result:
+    #         self.keyframes[j].draw_registration_result(self.keyframes[i], transformation=transform.array)
+    #     return transform
 
     def draw_cloud(self, index):
         self.lidar_scans[index].draw_cloud()
