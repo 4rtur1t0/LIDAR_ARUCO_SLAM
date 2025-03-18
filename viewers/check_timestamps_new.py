@@ -52,14 +52,14 @@ def main():
     # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O1-2024-03-06-17-30-39'
     # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O2-2024-03-07-13-33-34'
     # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O3-2024-03-18-17-11-17'
-    directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O4-2024-04-22-13-27-47'
+    # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O4-2024-04-22-13-27-47'
     # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O5-2024-04-24-12-47-35'
     # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O6-2024-04-10-11-09-24'
     # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O7-2024-04-22-13-45-50'
     # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O8-2024-04-24-13-05-16'
     # mixed INDOOR/OUTDOOR
     # directory = '/media/arvc/INTENSO/DATASETS/INDOOR_OUTDOOR/IO1-2024-05-03-09-51-52'
-    directory = '/media/arvc/INTENSO/DATASETS/test_arucos/test_arucos_asl'
+    directory = '/media/arvc/INTENSO/DATASETS/test_arucos/test_arucos1'
 
     # create scan Array,
     lidarscanarray = LiDARScanArray(directory=directory)
@@ -70,18 +70,18 @@ def main():
     odoobsarray = PosesArray()
     odoobsarray.read_data(directory=directory, filename='/robot0/odom/data.csv')
     # scanmatcher
-    smobsarray = PosesArray()
-    smobsarray.read_data(directory=directory, filename='/robot0/scanmatcher/data.csv')
+    # smobsarray = PosesArray()
+    # smobsarray.read_data(directory=directory, filename='/robot0/scanmatcher/data.csv')
 
     lidar_times = lidarscanarray.get_times()
     odo_times = odoobsarray.get_times()
-    sm_times = smobsarray.get_times()
+    # sm_times = smobsarray.get_times()
 
     # PLOTTING RELATIVE DELTA TIMES
     # plot_delta_times(gps_times, title='GPS delta_time (s)')
     plot_delta_times(lidar_times, title='LIDAR delta_time (s)')
     plot_delta_times(odo_times, title='ODO delta_time (s)')
-    plot_delta_times(sm_times, title='SM delta_time (s)')
+    # plot_delta_times(sm_times, title='SM delta_time (s)')
     # plot_delta_times(imu_times, title='IMU delta_time (orientation, s)')
 
     plot_relative_times(lidar_times, odo_times)

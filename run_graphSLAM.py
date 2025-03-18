@@ -152,11 +152,11 @@ def run_graphSLAM(directory):
         #  directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O5-2024-04-24-12-47-35'
         # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O6-2024-04-10-11-09-24'
         # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O7-2024-04-22-13-45-50'
-        directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O8-2024-04-24-13-05-16'
+        # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O8-2024-04-24-13-05-16'
         # # MIXTO
         # directory = '/media/arvc/INTENSO/DATASETS/INDOOR_OUTDOOR/IO1-2024-05-03-09-51-52'
         # directory = '/media/arvc/INTENSO/DATASETS/INDOOR_OUTDOOR/IO1-2024-05-03-09-51-52'
-        # directory = '/media/arvc/INTENSO/DATASETS/test_arucos/test_arucos_asl'
+        directory = '/media/arvc/INTENSO/DATASETS/test_arucos/test_arucos1'
     """
         TTD: must check that at the starting capture time, all data
     """

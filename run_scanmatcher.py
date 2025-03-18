@@ -77,8 +77,8 @@ def run_scanmatcher(directory=None):
     ################################################################################################
     if directory is None:
         # INDOOR
-        # directory = '/media/arvc/INTENSO/DATASETS/test_arucos/test_arucos_asl'
-        directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O1-2024-03-06-17-30-39'
+        directory = '/media/arvc/INTENSO/DATASETS/test_arucos/test_arucos_asl'
+        # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O1-2024-03-06-17-30-39'
 
     # create scan Array,
     lidarscanarray = LiDARScanArray(directory=directory)
