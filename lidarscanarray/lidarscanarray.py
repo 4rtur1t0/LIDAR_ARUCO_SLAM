@@ -71,9 +71,19 @@ class LiDARScanArray():
     def get_times(self):
         return self.scan_times
 
-    # def get_index(self, time):
-    #     index = self.scan_times == time
-    #     return index
+    def get(self, index):
+        return self.lidar_scans[index]
+
+    def remove_orphan_lidars(self, pose_array):
+        result_scan_times = []
+        for timestamp in self.scan_times:
+            pose_interpolated = pose_array.interpolated_pose_at_time(timestamp=timestamp)
+            if pose_interpolated is None:
+                continue
+            # if a correct pose can be interpolated at time
+            else:
+                result_scan_times.append(timestamp)
+        self.scan_times = result_scan_times
 
     def add_lidar_scans(self, keyframe_sampling=1):
         # First: add all keyframes with the known sampling

@@ -42,6 +42,8 @@ def main():
     # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O8-2024-04-24-13-05-16'
     # mixed INDOOR/OUTDOOR
     # directory = '/media/arvc/INTENSO/DATASETS/INDOOR_OUTDOOR/IO1-2024-05-03-09-51-52'
+    # directory = '/media/arvc/INTENSO/DATASETS/INDOOR_OUTDOOR/IO1-2024-05-03-09-51-52'
+    directory = '/media/arvc/INTENSO/DATASETS/test_arucos/test_arucos4'
 
     euroc_read = EurocReader(directory=directory)
 

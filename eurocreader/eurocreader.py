@@ -65,6 +65,28 @@ class EurocReader():
                                    'qx', 'qy', 'qz', 'qw'])
         return df
 
+    def save_poses_as_csv(self, sensor_times, poses, filename):
+        global_filename = self.directory+filename
+        import os
+        global_directory = os.path.dirname(os.path.abspath(global_filename))
+        try:
+            os.makedirs(global_directory)
+        except OSError:
+            print("Directory exists or creation failed", global_directory)
+        data_list = []
+        for i in range(len(poses)):
+            pi = poses[i]
+            t = pi.position
+            q = pi.quaternion
+            data_list.append({'timestamp': sensor_times[i],
+                         'x': t[0], 'y': t[1], 'z': t[2],
+                         'qx': q.qx, 'qy': q.qy, 'qz': q.qz, 'qw': q.qw})
+        df = pd.DataFrame(data_list, columns=['timestamp', 'x', 'y', 'z', 'qx', 'qy', 'qz', 'qw'])
+        df.to_csv(self.directory+filename, index=False, header=['#timestamp [ns]',
+                                   'x', 'y', 'z',
+                                   'qx', 'qy', 'qz', 'qw'])
+        return df
+
     def save_sensor_times_as_csv(self, sensor_times, filename):
         global_filename = self.directory+filename
         import os

@@ -37,6 +37,9 @@ class Vector():
     def __sub__(self, other):
         return Vector(self.array - other.array)
 
+    def __getitem__(self, item):
+        return self.array[item]
+
     def __mul__(self, other):
         """
         scalar product

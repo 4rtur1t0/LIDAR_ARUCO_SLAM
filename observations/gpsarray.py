@@ -58,6 +58,9 @@ class GPSArray():
     def get_time(self, index):
         return self.times[index]
 
+    def get_times(self):
+        return self.times
+
     def get(self, index):
         return self.values[index]
 
@@ -133,14 +136,15 @@ class GPSArray():
 
 
 class GPSPosition():
-    def __init__(self, latitude=None, longitude=None, altitude=None):
+    def __init__(self, latitude=None, longitude=None, altitude=None, covariance=[], status=0):
         """
         Create a pose from pandas df
         """
         self.latitude = latitude
         self.longitude = longitude
         self.altitude = altitude
-        # self.config_ref = config_ref
+        self.covariance = covariance
+        self.status = status
 
     def fromdf(self, df):
         """
@@ -149,7 +153,8 @@ class GPSPosition():
         self.latitude = df['latitude']
         self.longitude = df['longitude']
         self.altitude = df['altitude']
-        # self.config_ref = config_ref
+        self.covariance = np.array([df['covariance_d1'], df['covariance_d2'], df['covariance_d3']])
+        self.status = df['status']
 
     def to_utm(self, config_ref):
         x, y, altitude = gps2utm(latitude=self.latitude, longitude=self.longitude, altitude=self.altitude, config_ref=config_ref)

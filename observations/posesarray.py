@@ -17,7 +17,7 @@ class PosesArray():
     b) the relative transformation T between two times.
     """
 
-    def __init__(self, times=None, values=[]):
+    def __init__(self, times=None, values=None):
         """
         given a list of scan times (ROS times), each pcd is read on demand
         """
@@ -26,22 +26,26 @@ class PosesArray():
         self.values = values
         self.warning_max_time_diff_s = 1
 
-    # def init(self):
-    #     self.read_parameters()
-        # self.read_data()
-        # self.add_lidar_scans()
-
     def read_data(self, directory, filename):
         euroc_read = EurocReader(directory=directory)
         df_odo = euroc_read.read_csv(filename=filename)
         self.times = df_odo['#timestamp [ns]'].to_numpy()
+        self.values = []
         for index, row in df_odo.iterrows():
             self.values.append(Pose(row))
 
+    def from_transforms(self, times, transforms):
+        self.times = np.array(times)
+        self.values = []
+        for i in range(len(times)):
+            pose = Pose(df=None)
+            pose.from_transform(transforms[i])
+            self.values.append(pose)
+
     def save_data(self, directory, filename):
         euroc_read = EurocReader(directory=directory)
-        euroc_read.save_transforms_as_csv(transforms=self.values,
-                                          sensor_times=self.times, filename=filename)
+        euroc_read.save_poses_as_csv(poses=self.values,
+                                     sensor_times=self.times, filename=filename)
 
     def get_time(self, index):
         return self.times[index]
@@ -73,7 +77,7 @@ class PosesArray():
             print('interpolated_pose_at_time trying to interpolate with time difference greater than threshold')
             return None
         # ensures t1 < t < t2
-        if t1 < timestamp < t2:
+        if t1 <= timestamp <= t2:
             odo1 = self.values[idx1]
             odo2 = self.values[idx2]
             odointerp = self.interpolate_pose(odo1, t1, odo2, t2, timestamp)
@@ -119,7 +123,8 @@ class PosesArray():
         x = []
         y = []
         for i in range(len(self.times)):
-            T = self.values[i]
+            pose = self.values[i]
+            T = pose.T()
             t = T.pos()
             x.append(t[0])
             y.append(t[1])
@@ -127,20 +132,23 @@ class PosesArray():
         plt.scatter(x, y)
         plt.show()
 
-    # Example Usage
-    # times = [10.2, 3.5, 7.8, 15.0, 12.4]
-    # t = 9.0  # The time for which we need the closest bounds
-    # t1, t2 = find_closest_times_around_t(times, t)
-    # print(f"Two closest times around {t}: {t1}, {t2}")
-
 
 class Pose():
     def __init__(self, df):
         """
         Create a pose from pandas df
         """
-        self.position = Vector([df['x'], df['y'], df['z']])
-        self.quaternion = Quaternion(qx=df['qx'], qy=df['qy'], qz=df['qz'], qw=df['qw'])
+        if df is not None:
+            self.position = Vector([df['x'], df['y'], df['z']])
+            self.quaternion = Quaternion(qx=df['qx'], qy=df['qy'], qz=df['qz'], qw=df['qw'])
+        else:
+            self.position = None
+            self.quaternion = None
+
+    def from_transform(self, T):
+        self.position = Vector(T.pos())
+        self.quaternion = T.Q()
+        return self
 
     def T(self):
         T = HomogeneousMatrix(self.position, self.quaternion)

@@ -3,11 +3,11 @@ Run a scanmatcher using O3D for consecutive scans.
 """
 from artelib.homogeneousmatrix import HomogeneousMatrix
 from lidarscanarray.lidarscanarray import LiDARScanArray
-from observations.posesarray import PosesArray
+from observations.posesarray import PosesArray, Pose
 from scanmatcher.scanmatcher import ScanMatcher
-#from tools.gpsconversions import gps2utm
 import getopt
 import sys
+import matplotlib.pyplot as plt
 
 
 def find_options():
@@ -35,14 +35,14 @@ def compute_global_transforms(relative_transforms, T0):
     global_transforms = []
     global_transforms.append(T0)
     T = T0
-    for i in range(0, len(relative_transforms)):
+    for i in range(len(relative_transforms)):
         Tij = relative_transforms[i]
         T = T*Tij
         global_transforms.append(T)
     return global_transforms
 
 
-def compute_initial_relative_transformation(lidarscanarray, odoobsarray, i):
+def compute_initial_relative_transformation(lidarscanarray, odoobsarray, i, j):
     """
     Gets the times at the LiDAR observations at i and i+1.
     Gets the interpolated odometry values at those times.
@@ -50,13 +50,29 @@ def compute_initial_relative_transformation(lidarscanarray, odoobsarray, i):
     This severs as a initial estimation for the ScanMatcher
     """
     timei = lidarscanarray.get_time(i)
-    timeip1 = lidarscanarray.get_time(i+1)
+    timej = lidarscanarray.get_time(j)
     odoi = odoobsarray.interpolated_pose_at_time(timestamp=timei)
-    odoip1 = odoobsarray.interpolated_pose_at_time(timestamp=timeip1)
+    odoj = odoobsarray.interpolated_pose_at_time(timestamp=timej)
     Ti = odoi.T()
-    Tip1 = odoip1.T()
-    Tij = Ti.inv()*Tip1
+    Tj = odoj.T()
+    Tij = Ti.inv()*Tj
     return Tij
+
+
+def plot_transforms( transforms):
+    x = []
+    y = []
+    for i in range(len(transforms)):
+        T = transforms[i]
+        t = T.pos()
+        x.append(t[0])
+        y.append(t[1])
+    plt.figure()
+    plt.scatter(x, y)
+    plt.show()
+
+
+
 
 
 def run_scanmatcher(directory=None):
@@ -77,45 +93,52 @@ def run_scanmatcher(directory=None):
     ################################################################################################
     if directory is None:
         # INDOOR
-        directory = '/media/arvc/INTENSO/DATASETS/test_arucos/test_arucos_asl'
-        # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O1-2024-03-06-17-30-39'
-
-    # create scan Array,
-    lidarscanarray = LiDARScanArray(directory=directory)
-    lidarscanarray.read_parameters()
-    lidarscanarray.read_data()
-    lidarscanarray.add_lidar_scans()
+        directory = '/media/arvc/INTENSO/DATASETS/test_arucos/test_arucos4'
 
     # odometry
     odoobsarray = PosesArray()
     odoobsarray.read_data(directory=directory, filename='/robot0/odom/data.csv')
+    odoobsarray.plot_xy()
+    # create scan Array,
+    lidarscanarray = LiDARScanArray(directory=directory)
+    lidarscanarray.read_parameters()
+    lidarscanarray.read_data()
+    # lidarscanarray.scan_times = lidarscanarray.scan_times[0:10]
+    # remove lidars times without close odometry in time
+    lidarscanarray.remove_orphan_lidars(pose_array=odoobsarray)
+    lidarscanarray.add_lidar_scans()
     # create the scanmatching object
     scanmatcher = ScanMatcher(lidarscanarray=lidarscanarray)
-    # process
+    # Run the scanmatcher
     results_sm_relative = []
     lidarscanarray.load_pointcloud(0)
     lidarscanarray.filter_points(0)
     lidarscanarray.estimate_normals(0)
     for i in range(len(lidarscanarray)-1):
         print("PROCESSING SCAN i: ", i, "OUT OF ", len(lidarscanarray))
-        # compute relative initial transformation from odometry
-        Tini = compute_initial_relative_transformation(lidarscanarray, odoobsarray, i)
+        # compute relative initial transformation from odometry from Lidar at time i and i+1
+        Tini = compute_initial_relative_transformation(lidarscanarray, odoobsarray, i=i, j=i+1)
         lidarscanarray.load_pointcloud(i+1)
         lidarscanarray.filter_points(i+1)
         lidarscanarray.estimate_normals(i+1)
-        sm_result_i = scanmatcher.registration(i, i+1, Tini)
+        sm_result_i = scanmatcher.registration(i=i, j=i+1, Tij_0=Tini)
         results_sm_relative.append(sm_result_i)
         lidarscanarray.unload_pointcloud(i)
 
-    # save sm result
+    # Save the scanmatching result
+    # The initial T0 transformations is chosen as the identity
     T0 = HomogeneousMatrix()
     results_sm_global = compute_global_transforms(results_sm_relative, T0)
-    # results array.  saving the results from the scanmatching process
+    # plot_transforms(results_sm_global)
+    # results_sm_global = to_poses(results_sm_global)
+    # Results array.  saving the results from the scanmatching process
     # caution, saving global transformation as results!
-    sm_resultsarray = PosesArray(times=lidarscanarray.get_times(), values=results_sm_global)
+    sm_resultsarray = PosesArray()
+    sm_resultsarray.from_transforms(times=lidarscanarray.get_times(), transforms=results_sm_global)
+    # sm_resultsarray = PosesArray(times=lidarscanarray.get_times(), values=results_sm_global)
     sm_resultsarray.save_data(directory=directory+'/robot0/scanmatcher', filename='/data.csv')
     # plot results
-    # sm_resultsarray.plot_xy()
+    sm_resultsarray.plot_xy()
     print('FINISHED SCANMATCHING!')
 
 

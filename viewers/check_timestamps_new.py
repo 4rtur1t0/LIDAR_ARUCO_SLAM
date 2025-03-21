@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 
 from lidarscanarray.lidarscanarray import LiDARScanArray
+from observations.gpsarray import GPSArray
 from observations.posesarray import PosesArray
 
 
@@ -29,18 +30,30 @@ def plot_delta_times(sensor_times, units=1e9, title='TITLE'):
     plt.show(block=True)
 
 
-def plot_relative_times(lidar_times, odo_times, units=1e9, title='TITLE'):
-    time_start = lidar_times[0]
+def plot_relative_times(lidar_times, odo_times, title='Time vs. index (s). Relative to initial odo time'):
+    time_start = odo_times[0]
     lidar_times = (lidar_times-time_start)/1e9
     odo_times = (odo_times-time_start)/1e9
     lidar_times = np.array(lidar_times)
     odo_times = np.array(odo_times)
-    lidar_times=lidar_times[0:10]
-    odo_times = odo_times[0:100]
+    # lidar_times = lidar_times[0:10]
+    # odo_times = odo_times[0:100]
     plt.title(title)
     plt.plot(range(len(lidar_times)), lidar_times)
     plt.plot(range(len(odo_times)), odo_times)
     plt.show(block=True)
+
+
+def plot_relative_times_scatter(times1, times2, title='Time 1 vs. Time 2 (s). Relative to initial Time 1'):
+    time_start = times1[0]
+    times1 = np.array(times1-time_start)/1e9
+    times2 = np.array(times2-time_start)/1e9
+    plt.title(title)
+    plt.scatter(times1, np.ones((len(times1))), label='Time 1')
+    plt.scatter(times2, np.ones((len(times2))),label='Time 2')
+    plt.legend()
+    plt.show(block=True)
+
 
 
 def main():
@@ -59,12 +72,8 @@ def main():
     # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O8-2024-04-24-13-05-16'
     # mixed INDOOR/OUTDOOR
     # directory = '/media/arvc/INTENSO/DATASETS/INDOOR_OUTDOOR/IO1-2024-05-03-09-51-52'
-    directory = '/media/arvc/INTENSO/DATASETS/test_arucos/test_arucos1'
+    directory = '/media/arvc/INTENSO/DATASETS/test_arucos/test_arucos4'
 
-    # create scan Array,
-    lidarscanarray = LiDARScanArray(directory=directory)
-    # lidarscanarray.read_parameters()
-    lidarscanarray.read_data()
     # lidarscanarray.add_lidar_scans()
     # odometry
     odoobsarray = PosesArray()
@@ -73,9 +82,23 @@ def main():
     # smobsarray = PosesArray()
     # smobsarray.read_data(directory=directory, filename='/robot0/scanmatcher/data.csv')
 
+    # create scan Array,
+    lidarscanarray = LiDARScanArray(directory=directory)
+    # lidarscanarray.read_parameters()
+    lidarscanarray.read_data()
+    lidarscanarray.remove_orphan_lidars(pose_array=odoobsarray)
+
+
+    # gpsobservations
+    gpsobsarray = GPSArray()
+    gpsobsarray.read_data(directory=directory, filename='/robot0/gps0/data.csv')
+    gpsobsarray.read_config_ref(directory=directory)
+
+
     lidar_times = lidarscanarray.get_times()
     odo_times = odoobsarray.get_times()
     # sm_times = smobsarray.get_times()
+    gps_times = gpsobsarray.get_times()
 
     # PLOTTING RELATIVE DELTA TIMES
     # plot_delta_times(gps_times, title='GPS delta_time (s)')
@@ -84,12 +107,12 @@ def main():
     # plot_delta_times(sm_times, title='SM delta_time (s)')
     # plot_delta_times(imu_times, title='IMU delta_time (orientation, s)')
 
-    plot_relative_times(lidar_times, odo_times)
+    # plot_relative_times(lidar_times, odo_times)
+    plot_relative_times_scatter(times1=lidar_times, times2=odo_times, title='LIDAR-ODO')
+    plot_relative_times_scatter(times1=lidar_times, times2=gps_times, title='LIDAR-GPS')
 
-
-
-    odo_times = np.asarray(odo_times)
-    lidar_times = np.asarray(lidar_times)
+    # odo_times = np.asarray(odo_times)
+    # lidar_times = np.asarray(lidar_times)
     # imu_times = np.asarray(imu_times)
     # gps_times = np.asarray(gps_times)
 

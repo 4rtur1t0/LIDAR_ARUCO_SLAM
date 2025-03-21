@@ -16,7 +16,7 @@ class ScanMatcher():
         self.lidarscanarray = lidarscanarray
         self.icp_threshold = icp_threshold
 
-    def registration(self, i, j, Tij, method='icppointplane', show=False):
+    def registration(self, i, j, Tij_0, method='icppointplane', show=False):
         """
         Compute relative transformation using different methods:
         - Simple ICP.
@@ -27,10 +27,11 @@ class ScanMatcher():
         # requires precomputation of normals
         if method == 'icppointplane':
             transform = self.registration_icp_point_plane(self.lidarscanarray[i], self.lidarscanarray[j],
-                                                          initial_transform=Tij.array, show=show)
+                                                          initial_transform=Tij_0.array, show=show)
+        # does not require precomputation of normals
         else:
             transform = self.registration_icp_point_point(self.lidarscanarray[i], self.lidarscanarray[j],
-                                                          initial_transform=Tij.array, show=show)
+                                                          initial_transform=Tij_0.array, show=show)
 
 
         # # TODO: Compute inintial transformation from IMU
