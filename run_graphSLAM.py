@@ -3,17 +3,20 @@ Using GTSAM in a GraphSLAM context.
 We are integrating odometry, scanmatching odometry and (if present) GPS.
 
 """
+import numpy as np
+
 from artelib.homogeneousmatrix import HomogeneousMatrix
 from artelib.vector import Vector
 from artelib.euler import Euler
+from eurocreader.eurocreader import EurocReader
 from lidarscanarray.lidarscanarray import LiDARScanArray
 from observations.gpsarray import GPSArray
 from observations.posesarray import PosesArray
-from scanmatcher.scanmatcher import ScanMatcher
 import getopt
 import sys
 from graphslam.graphSLAM import GraphSLAM
 import matplotlib.pyplot as plt
+from gtsam.symbol_shorthand import X, L
 
 
 def find_options():
@@ -62,6 +65,60 @@ def find_options():
 #     # pointcloud_global se puede guardar
 #
 
+def read_aruco_ids(directory, filename):
+    euroc_read = EurocReader(directory=directory)
+    df_aruco = euroc_read.read_csv(filename=filename)
+    aruco_ids = df_aruco['aruco_id'].to_numpy()
+    return aruco_ids
+
+def plot_everything(odoarray, smarray, gpsarray):
+    plt.figure()
+    odo = odoarray.get_transforms()
+    sm = smarray.get_transforms()
+    gps = gpsarray.get_utm_positions()
+    podo = []
+    psm = []
+    pgps = []
+    for i in range(len(odo)):
+        podo.append(odo[i].pos())
+    for i in range(len(sm)):
+        psm.append(sm[i].pos())
+    for i in range(len(gps)):
+        if gps[i].status >= 0:
+            pgps.append([gps[i].x, gps[i].y, gps[i].altitude])
+    podo = np.array(podo)
+    psm = np.array(psm)
+    pgps = np.array(pgps)
+    plt.scatter(podo[:, 0], podo[:, 1], label='odo')
+    plt.scatter(psm[:, 0], psm[:, 1], label='sm')
+    plt.scatter(pgps[:, 0], pgps[:, 1], label='gps')
+    plt.legend()
+    plt.xlabel('X (m, UTM)')
+    plt.ylabel('Y (m, UTM)')
+    plt.show()
+
+
+def plot_gps_graphslam(utmfactors, graphslam):
+    utmfactors = np.array(utmfactors)
+    fig = plt.figure(0)
+
+    plt.cla()
+    i = 0
+    data = []
+    while graphslam.current_estimate.exists(X(i)):
+        ce = graphslam.current_estimate.atPose3(X(i))
+        T = HomogeneousMatrix(ce.matrix())
+        data.append(T.pos())
+        i += 1
+    data = np.array(data)
+    plt.plot(utmfactors[:, 0], utmfactors[:, 1], 'o', color='red')
+    plt.plot(data[:, 0], data[:, 1], '.', color='blue')
+    plt.xlabel('X (m, UTM)')
+    plt.ylabel('Y (m, UTM)')
+    plt.pause(0.001)
+
+
+
 
 def compute_relative_transformation(lidarscanarray, posesarray, i, j, T0gps):
     """
@@ -109,26 +166,42 @@ def run_graphSLAM(directory):
     """
         TTD: must check that at the starting capture time, all data
     """
+    skip_optimization = 40
     # T0: Define the initial transformation (Prior for GraphSLAM)
+    # T0 = HomogeneousMatrix(Vector([-50, 0, 0]), Euler([0, 0, np.pi/4]))
     T0 = HomogeneousMatrix()
     # Caution: Actually, we are estimating the position and orientation of the GPS at this position at the robot.
-    T0_gps = HomogeneousMatrix(Vector([0.36, 0, 0]), Euler([0, 0, 0]))
+    # T LiDAR-GPS
+    Tlidar_gps = HomogeneousMatrix(Vector([0.36, 0, -0.4]), Euler([0, 0, 0]))
+    # T GPS - LiDAR
+    Tgps_lidar = Tlidar_gps.inv()
+    # T LiDAR-camera
+    TL_cam = HomogeneousMatrix(Vector([0, 0.17, 0]), Euler([0, np.pi/2, -np.pi/2]))
+
+    # ARUCO dict: possible arucos
+    aruco_dict = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    # THE LANDmarks in the map
+    landmarks_in_map_ids = []
+    landmarks_with_edges_ids = []
 
     # odometry
     odoobsarray = PosesArray()
     odoobsarray.read_data(directory=directory, filename='/robot0/odom/data.csv')
-    odoobsarray.plot_xy()
+    # odoobsarray.plot_xy()
     # scanmatcher
     smobsarray = PosesArray()
     smobsarray.read_data(directory=directory, filename='/robot0/scanmatcher/data.csv')
-    smobsarray.plot_xy()
+    # smobsarray.plot_xy()
     # ARUCO observations. In the camera reference frame
     arucoobsarray = PosesArray()
     arucoobsarray.read_data(directory=directory, filename='/robot0/aruco/data.csv')
+    aruco_ids = read_aruco_ids(directory=directory, filename='/robot0/aruco/data.csv')
     # gpsobservations
     gpsobsarray = GPSArray()
     gpsobsarray.read_data(directory=directory, filename='/robot0/gps0/data.csv')
     gpsobsarray.read_config_ref(directory=directory)
+    # gpsobsarray.plot_xy()
+    plot_everything(odoarray=odoobsarray, smarray=smobsarray, gpsarray=gpsobsarray)
 
     # create scan Array, We are actually estimating the poses at which
     lidarscanarray = LiDARScanArray(directory=directory)
@@ -136,10 +209,12 @@ def run_graphSLAM(directory):
     lidarscanarray.read_data()
     # remove scans without corresponding odometry (in consequence, without scanmatching)
     lidarscanarray.remove_orphan_lidars(pose_array=odoobsarray)
+    lidarscanarray.remove_orphan_lidars(pose_array=smobsarray)
+    # load the scans according to the times, do not load the corresponding pointclouds
     lidarscanarray.add_lidar_scans()
 
     # create the graphslam graph
-    graphslam = GraphSLAM(T0=T0, T0_gps=T0_gps)
+    graphslam = GraphSLAM(T0=T0, T0_gps=Tlidar_gps)
     graphslam.init_graph()
     base_time = lidarscanarray.get_time(0)
     # loop through all edges first, include relative measurements such as odometry and scanmatching
@@ -148,82 +223,97 @@ def run_graphSLAM(directory):
         print('ADDING EDGE (i, j): (', i, ',', i+1, ')')
         print('At experiment times i: ', (lidarscanarray.get_time(i)-base_time)/1e9)
         print('At experiment times i+1: ', (lidarscanarray.get_time(i+1)-base_time)/1e9)
-        atb_odo = compute_relative_transformation(lidarscanarray=lidarscanarray, posesarray=odoobsarray, i=i, j=i+1, T0gps=T0_gps)
-        atb_sm = compute_relative_transformation(lidarscanarray=lidarscanarray, posesarray=smobsarray, i=i, j=i+1, T0gps=T0_gps)
+        atb_odo = compute_relative_transformation(lidarscanarray=lidarscanarray, posesarray=odoobsarray, i=i, j=i+1, T0gps=Tlidar_gps)
+        atb_sm = compute_relative_transformation(lidarscanarray=lidarscanarray, posesarray=smobsarray, i=i, j=i+1, T0gps=Tlidar_gps)
         # create the initial estimate of node i+1 using SM
         graphslam.add_initial_estimate(atb_sm, i + 1)
         # graphslam.add_initial_estimate(atb_odo, i + 1)
         # add edge observations between vertices. We are adding a binary factor between a newly observed state and
         # the previous state. Using scanmatching odometry and raw odometry
         graphslam.add_edge(atb_sm, i, i + 1, 'SM')
-        # graphslam.add_edge(atb_odo, i, i + 1, 'ODO')
+        graphslam.add_edge(atb_odo, i, i + 1, 'ODO')
+        if i%skip_optimization == 0:
+            print('GRAPHSLAM OPTIMIZE')
+            print(50*'*')
+            graphslam.optimize()
+            # graphslam.plot_simple(plot3D=False)
+            graphslam.plot_simple_w_landmarks(plot3D=False, landmarks_in_map_ids=landmarks_in_map_ids)
 
-    graphslam.plot_simple()
+    graphslam.optimize()
+    graphslam.plot_simple(plot3D=False)
     #####################################################################################################
     # now include gps readings as GPSFactor. Lidar times and indexes are in the same order and equivalent
     #####################################################################################################
+    utmfactors = []
     for i in range(len(lidarscanarray)):
         lidar_time = lidarscanarray.get_time(index=i)
         # given the lidar time, find the two closest GPS observations and get an interpolated GPS value
         gps_interp_reading = gpsobsarray.interpolated_utm_at_time(timestamp=lidar_time)
-        if gps_interp_reading is not None:
-            print('*** Added GPS estimation at pose i: ', i)
-            graphslam.add_GPSfactor(gps_interp_reading.x, gps_interp_reading.y,
-                                    gps_interp_reading.altitude, i)
+        if gps_interp_reading is not None and gps_interp_reading.status >= 0:
+            print('*** Adding GPS estimation at pose i: ', i)
+            utmfactors.append([gps_interp_reading.x, gps_interp_reading.y])
+            graphslam.add_GPSfactor(utmx=gps_interp_reading.x, utmy=gps_interp_reading.y,
+                                    utmaltitude=gps_interp_reading.altitude,
+                                    gpsnoise=np.sqrt(gps_interp_reading.covariance),
+                                    i=i)
+            if i % skip_optimization == 0:
+                print('GRAPHSLAM OPTIMIZE')
+                print(50 * '*')
+                graphslam.optimize()
+                plot_gps_graphslam(utmfactors, graphslam)
+                graphslam.plot_simple_w_landmarks(plot3D=False, landmarks_in_map_ids=landmarks_in_map_ids)
+            # graphslam.plot_simple(plot3D=False)
+            # graphslam.optimize()
+
+    # plot_gps_graphslam(utmfactors, graphslam)
+    # graphslam.plot_simple(plot3D=False)
+    # graphslam.plot_simple_w_landmarks(plot3D=False)
+    graphslam.optimize()
+    # graphslam.plot_simple(plot3D=False)
+    # plot_gps_graphslam(utmfactors, graphslam)
+    graphslam.plot_simple_w_landmarks(plot3D=False, landmarks_in_map_ids=landmarks_in_map_ids)
 
     #####################################################################################################
     # Now add landmarks. In
     #####################################################################################################
-    for i in range(len(arucoobsarray)):
-        time_aruco = arucoobsarray.get_time(index=i)
-        # given the lidar time, find the relative the observation
-        gps_interp_reading = gpsobsarray.interpolated_utm_at_time(timestamp=time_aruco)
-        if gps_interp_reading is not None:
-            print('*** Added GPS estimation at pose i: ', i)
-            graphslam.add_GPSfactor(gps_interp_reading.x, gps_interp_reading.y,
-                                    gps_interp_reading.altitude, i)
+    # Filter ARUCO readings.
+    for j in range(len(arucoobsarray)):
+        time_aruco = arucoobsarray.get_time(index=j)
+        arucoobs = arucoobsarray.get(j)
+        # the ARUCO observation from the camera reference system to the reference system placed on the GPS (the GPSfACTOR is directly applied)
+        # transform the observation to the reference system on the GPS
+        Tc_aruco = arucoobs.T()
+        Tgps_aruco = Tgps_lidar*TL_cam*Tc_aruco
+        aruco_id = aruco_ids[j]
+        # simple filtering of false ids
+        if aruco_id not in aruco_dict:
+            continue
+        # find closest pose in lidarscans array
+        idx_lidar_graphslam, time_lidar_graphslam=lidarscanarray.get_index_closest_to_time(timestamp=time_aruco,
+                                                                                           delta_threshold_s=0.05)
+        if idx_lidar_graphslam is None:
+            continue
+        # if the landmark does not exist, create it from pose idx_lidar_graphslam
+        if aruco_id not in landmarks_in_map_ids:
+            graphslam.add_initial_landmark_estimate(Tgps_aruco, idx_lidar_graphslam, aruco_id)
+            landmarks_in_map_ids.append(aruco_id)
+        else:
+            # if the landmark exists, create edge between pose i and landmark aruco_id
+            # sigmas stand for alpha, beta, gamma, sigmax, sigmay, sigmaz (sigmax is larger, since corresponds to Zc)
+            graphslam.add_edge_pose_landmark(atb=Tgps_aruco, i=idx_lidar_graphslam, j=aruco_id,
+                                             sigmas=np.array([5, 5, 5, 0.5, 0.2, 0.2]))
+            landmarks_with_edges_ids.append(aruco_id)
 
-        
-        
+    print('Landmarks in map. ', landmarks_in_map_ids)
+    print('Landmarks with edges. ', landmarks_with_edges_ids)
     print('FINAL OPTIMIZATION OF THE MAP')
     graphslam.optimize()
     graphslam.plot_simple(skip=1, plot3D=False)
-    graphslam.plot2D()
-    graphslam.plot3D()
+    graphslam.plot_simple_w_landmarks(plot3D=False, landmarks_in_map_ids=landmarks_in_map_ids)
+    # graphslam.plot2D()
+    # graphslam.plot3D()
     print('ENDED SLAM!! SAVING RESULTS!!')
 
-
-
-
-
-        # gps_index = get_current_gps_reading(current_time, gps_times, max_delta_time_s=0.05)
-        # if gps_index is not None:
-        #     print('*** Added GPS estimation at pose i: ', i)
-        #     graphslam.add_GPSfactor(df_gps['x'].iloc[gps_index], df_gps['y'].iloc[gps_index],
-        #                         df_gps['altitude'].iloc[gps_index], i)
-
-
-    #
-    #
-    # # Build the Euroc format reader
-    # # euroc_read = EurocReader(directory=directory)
-    # # the function gets gps, if available, and computes UTM coordinates at its origin
-    # # CAUTION: the df_scanmatcher data is referred to the LIDAR reference system. A T0_gps transform should be used if
-    # # we need to consider GPS readings
-    # # caution: the GPS is only considered if the timestamp with scan_times (LiDAR) is below 0.05 seconds
-    # scan_times, df_scanmatcher_global, df_odo_global, df_gps, gps_times, T0_gps = prepare_experiment_data(euroc_read=euroc_read)
-    # if T0_gps is None:
-    #     T0_gps = HomogeneousMatrix()
-    # # Read global transformations from scanmatcher and change the reference system to the GPS (if the GPS is available)
-    # scanmatcher_global = compute_homogeneous_transforms(df_scanmatcher_global)
-    # # modify transform if GPS readings are to be included
-    # scanmatcher_global = multiply_by_transform(scanmatcher_global, Trel=T0_gps)
-    # scanmatcher_relative = compute_relative_transformations(global_transforms=scanmatcher_global)
-    # # read odometry and compute relative transforms
-    # odo_transforms = compute_homogeneous_transforms(df_odo_global)
-    # odo_transforms = multiply_by_transform(odo_transforms, Trel=T0_gps)
-    # relative_transforms_odo = compute_relative_transformations(global_transforms=odo_transforms)
-    #
     #
     # # create the Data Association object
     # dassoc = LoopClosing(graphslam, distance_backwards=distance_backwards, radius_threshold=radius_threshold)

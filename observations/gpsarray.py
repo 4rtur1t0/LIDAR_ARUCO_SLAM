@@ -1,11 +1,6 @@
 import numpy as np
 import yaml
-
-from artelib.homogeneousmatrix import HomogeneousMatrix
-from artelib.tools import slerp
 from eurocreader.eurocreader import EurocReader
-from artelib.vector import Vector
-from artelib.quaternion import Quaternion
 import bisect
 import matplotlib.pyplot as plt
 from pyproj import Proj
@@ -19,25 +14,20 @@ class GPSArray():
     b) the transformed UTM coordinates
     b) the distance two GPS.
     """
-    def __init__(self, times=None, values=[]):
+    def __init__(self, times=None, values=None):
         """
-        given a list of scan times (ROS times), each pcd is read on demand
+        Hold a number of GPS readings. Convert to UTM when needed.
         """
-        # self.directory = directory
         self.times = times
         self.values = values
         self.warning_max_time_diff_s = 1
         self.config_ref = None
 
-    # def init(self):
-    #     self.read_parameters()
-        # self.read_data()
-        # self.add_lidar_scans()
-
     def read_data(self, directory, filename):
         euroc_read = EurocReader(directory=directory)
         df_odo = euroc_read.read_csv(filename=filename)
         self.times = df_odo['#timestamp [ns]'].to_numpy()
+        self.values = []
         for index, row in df_odo.iterrows():
             gpspos = GPSPosition()
             gpspos.fromdf(row)
@@ -64,6 +54,12 @@ class GPSArray():
     def get(self, index):
         return self.values[index]
 
+    def get_utm_positions(self):
+        utmpositions = []
+        for gpsvalue in self.values:
+            utmpositions.append(gpsvalue.to_utm(config_ref=self.config_ref))
+        return utmpositions
+
     def get_closest_at_time(self, timestamp):
         d = np.abs(self.times - timestamp)
         index = np.argmin(d)
@@ -78,13 +74,14 @@ class GPSArray():
     def interpolated_utm_at_time(self, timestamp, delta_threshold_s=1):
         """
         Find a Pose for timestamp, looking for the two closest times
+        Every GPS reading is converted to UTM considering the GPS reference.
         """
         idx1, t1, idx2, t2 = self.find_closest_times_around_t_bisect(timestamp)
         print('Time distances: ', (timestamp-t1)/1e9, (t2-timestamp)/1e9)
         # ensure t1 < t < t2 and the time distances are below a threshold s
         if ((timestamp - t1)/1e9 > delta_threshold_s) or ((t2-timestamp)/1e9 > delta_threshold_s):
             return None
-        if t1 < timestamp < t2:
+        if t1 <= timestamp <= t2:
             gps1 = self.values[idx1]
             gps2 = self.values[idx2]
             utm1 = gps1.to_utm(config_ref=self.config_ref)
@@ -108,35 +105,35 @@ class GPSArray():
             # Take the closest two times around t
             return idx-1, self.times[idx - 1], idx,  self.times[idx]
 
-    def interpolate_utm(self, odo1, t1, odo2, t2, t):
+    def interpolate_utm(self, utm1, t1, utm2, t2, t):
         # Compute interpolation factor
         alpha = (t - t1) / (t2 - t1)
         # Linear interpolation of position and altitude
-        p_t = (1 - alpha) * odo1.position.pos() + alpha * odo2.position.pos()
-        interutm = UTMPosition(x=p_t[0], y=p_t[1], altitude=p_t[2])
-        return interutm
+        p_t = (1 - alpha) * utm1.pos() + alpha * utm2.pos()
+        status = min(utm1.status, utm2.status)
+        # covariance as the maximum of the two
+        interpcovariance = np.maximum(utm1.covariance, utm2.covariance)
+        interputm = UTMPosition(x=p_t[0], y=p_t[1], altitude=p_t[2],
+                                covariance=interpcovariance,
+                                status=status)
+        return interputm
 
     def plot_xy(self):
         x = []
         y = []
         for i in range(len(self.times)):
-            T = self.values[i]
-            t = T.pos()
-            x.append(t[0])
-            y.append(t[1])
+            gpspos = self.values[i]
+            if gpspos.status >= 0:
+                utmposition = gpspos.to_utm(config_ref=self.config_ref)
+                x.append(utmposition.x)
+                y.append(utmposition.y)
         plt.figure()
         plt.scatter(x, y)
         plt.show()
 
-    # Example Usage
-    # times = [10.2, 3.5, 7.8, 15.0, 12.4]
-    # t = 9.0  # The time for which we need the closest bounds
-    # t1, t2 = find_closest_times_around_t(times, t)
-    # print(f"Two closest times around {t}: {t1}, {t2}")
-
 
 class GPSPosition():
-    def __init__(self, latitude=None, longitude=None, altitude=None, covariance=[], status=0):
+    def __init__(self, latitude=None, longitude=None, altitude=None, covariance=None, status=0):
         """
         Create a pose from pandas df
         """
@@ -158,14 +155,16 @@ class GPSPosition():
 
     def to_utm(self, config_ref):
         x, y, altitude = gps2utm(latitude=self.latitude, longitude=self.longitude, altitude=self.altitude, config_ref=config_ref)
-        return UTMPosition(x=x, y=y, altitude=altitude)
+        return UTMPosition(x=x, y=y, altitude=altitude, covariance=self.covariance, status=self.status)
 
 
 class UTMPosition():
-    def __init__(self, x, y, altitude):
+    def __init__(self, x, y, altitude, covariance, status):
         self.x = x
         self.y = y
         self.altitude = altitude
+        self.covariance = covariance
+        self.status = status
 
     def pos(self):
         return np.array([self.x, self.y, self.altitude])

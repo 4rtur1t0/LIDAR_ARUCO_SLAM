@@ -1,5 +1,4 @@
 import numpy as np
-
 from artelib.homogeneousmatrix import HomogeneousMatrix
 from artelib.tools import slerp
 from eurocreader.eurocreader import EurocReader
@@ -16,15 +15,19 @@ class PosesArray():
     a) the interpolated Pose at a given time (from the two closest poses).
     b) the relative transformation T between two times.
     """
-
     def __init__(self, times=None, values=None):
         """
         given a list of scan times (ROS times), each pcd is read on demand
         """
-        # self.directory = directory
         self.times = times
         self.values = values
         self.warning_max_time_diff_s = 1
+
+    def __len__(self):
+        return len(self.times)
+
+    def __getitem__(self, item):
+        return self.values[item]
 
     def read_data(self, directory, filename):
         euroc_read = EurocReader(directory=directory)
@@ -55,6 +58,17 @@ class PosesArray():
 
     def get(self, index):
         return self.values[index]
+
+    def get_poses(self):
+        return self.values
+
+    def get_transforms(self):
+        transforms = []
+        for i in range(len(self.times)):
+            pose = self.values[i]
+            T = pose.T()
+            transforms.append(T)
+        return transforms
 
     def get_closest_at_time(self, timestamp):
         d = np.abs(self.times - timestamp)
@@ -108,14 +122,13 @@ class PosesArray():
         q1 = odo1.quaternion
         q2 = odo2.quaternion
         q_t = slerp(q1, q2, alpha)
-
         poset = {'x': p_t[0],
-                'y': p_t[1],
-                'z': p_t[2],
-                'qx': q_t.qx,
-                'qy': q_t.qy,
-                'qz': q_t.qz,
-                'qw': q_t.qw}
+                 'y': p_t[1],
+                 'z': p_t[2],
+                 'qx': q_t.qx,
+                 'qy': q_t.qy,
+                 'qz': q_t.qz,
+                 'qw': q_t.qw}
         interppose = Pose(df=poset)
         return interppose
 

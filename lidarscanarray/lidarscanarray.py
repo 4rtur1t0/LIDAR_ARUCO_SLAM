@@ -1,4 +1,5 @@
 import time
+import bisect
 import numpy as np
 from artelib.homogeneousmatrix import HomogeneousMatrix
 import open3d as o3d
@@ -8,8 +9,7 @@ from tools.sampling import sample_times
 import yaml
 
 
-class LiDARScanArray():
-    # def __init__(self, directory, scan_times, voxel_size, method='icppointplane'):
+class LiDARScanArray:
     def __init__(self, directory):
         """
         given a list of scan times (ROS times), each pcd is read on demand
@@ -17,19 +17,8 @@ class LiDARScanArray():
         self.directory = directory
         self.scan_times = None
         self.lidar_scans = []
-        # registration
-        # self.method = None
         self.show_registration_result = False
-        # sampling
-        # self.start_index = None
-        # self.delta_time = None
-        # self.voxel_size = None
         self.parameters = None
-
-    # def init(self):
-    #     self.read_parameters()
-    #     self.read_data()
-    #     self.add_lidar_scans()
 
     def __len__(self):
         return len(self.scan_times)
@@ -42,12 +31,6 @@ class LiDARScanArray():
         with open(yaml_file_global) as file:
             scanmatcher_parameters = yaml.load(file, Loader=yaml.FullLoader)
         self.parameters = scanmatcher_parameters
-        # self.method = scanmatcher_parameters.get('method', 'icppointplane')
-        # self.start_index = scanmatcher_parameters.get('start_index', 0)
-        # sample LiDAR scans with delta_time in seconds (of course, depends on available data)
-        # self.delta_time = scanmatcher_parameters.get('delta_time', 0.5)
-        # voxel size: pointclouds will be filtered with this voxel size
-        # self.voxel_size = scanmatcher_parameters.get('voxel_size', None)
         return scanmatcher_parameters
 
     def read_data(self):
@@ -68,11 +51,43 @@ class LiDARScanArray():
         """
         return self.scan_times[index]
 
+    def get_index_closest_to_time(self, timestamp, delta_threshold_s):
+        """
+        Given a timestamp. Find the closest time within delta_threshold_s seconds and return its corrsponding index.
+        """
+        idx1, t1, idx2, t2 = self.find_closest_times_around_t_bisect(timestamp)
+        d1 = abs((timestamp - t1) / 1e9)
+        d2 = abs((t2 - timestamp) / 1e9)
+        print('Time ARUCO times: ', d1, d2)
+        if (d1 > delta_threshold_s) and (d2 > delta_threshold_s):
+            print('get_index_closest_to_time could not find any close time')
+            return None, None
+        if d1 <= d2:
+            return idx1, t1
+        else:
+            return idx2, t2
+        # return None
+
     def get_times(self):
         return self.scan_times
 
     def get(self, index):
         return self.lidar_scans[index]
+
+    def find_closest_times_around_t_bisect(self, t):
+        # Find the index where t would be inserted in sorted_times
+        idx = bisect.bisect_left(self.scan_times, t)
+
+        # Determine the two closest times
+        if idx == 0:
+            # t is before the first element
+            return 0, self.scan_times[0], 1, self.scan_times[1]
+        elif idx == len(self.scan_times):
+            # t is after the last element
+            return -2, self.scan_times[-2], -1, self.scan_times[-1]
+        else:
+            # Take the closest two times around t
+            return idx - 1, self.scan_times[idx - 1], idx, self.scan_times[idx]
 
     def remove_orphan_lidars(self, pose_array):
         result_scan_times = []

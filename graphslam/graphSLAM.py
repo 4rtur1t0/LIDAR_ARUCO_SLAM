@@ -7,20 +7,20 @@ import gtsam.utils.plot as gtsam_plot
 import matplotlib.pyplot as plt
 import numpy as np
 from artelib.homogeneousmatrix import HomogeneousMatrix
-
+from gtsam.symbol_shorthand import X, L
 
 # Declare the 3D translational standard deviations of the prior factor's Gaussian model, in meters.
-prior_xyz_sigma = 10.0000000
+prior_xyz_sigma = 10000.0000000
 # Declare the 3D rotational standard deviations of the prior factor's Gaussian model, in degrees.
-prior_rpy_sigma = 10.0000000
+prior_rpy_sigma = 1000.0000000
 # Declare the 3D translational standard deviations of the odometry factor's Gaussian model, in meters.
-odo_xyz_sigma = 0.05
+odo_xyz_sigma = 0.1
 # Declare the 3D rotational standard deviations of the odometry factor's Gaussian model, in degrees.
-odo_rpy_sigma = 3
+odo_rpy_sigma = 10
 # Declare the 3D translational standard deviations of the scanmatcher factor's Gaussian model, in meters.
-icp_xyz_sigma = 0.05
+icp_xyz_sigma = 0.1
 # Declare the 3D rotational standard deviations of the odometry factor's Gaussian model, in degrees.
-icp_rpy_sigma = 0.05
+icp_rpy_sigma = 5
 # GPS noise: in UTM, x, y, height
 gps_xy_sigma = 2.5
 gps_altitude_sigma = 3.0
@@ -79,25 +79,54 @@ class GraphSLAM():
     def init_graph(self):
         T = self.T0
         # init graph starting at 0 and with initial pose T0 = eye
-        self.graph.push_back(gtsam.PriorFactorPose3(0, gtsam.Pose3(T.array), self.PRIOR_NOISE))
+        self.graph.push_back(gtsam.PriorFactorPose3(X(0), gtsam.Pose3(T.array), self.PRIOR_NOISE))
         # CAUTION: the initial T0 transform is the identity.
-        self.initial_estimate.insert(0, gtsam.Pose3())
+        self.initial_estimate.insert(X(0), gtsam.Pose3())
         # self.current_estimate = self.initial_estimate
-        self.current_estimate.insert(0, gtsam.Pose3())
-
-    def add_edge(self, atb, i, j, noise_type):
-        noise = self.select_noise(noise_type)
-        # add consecutive observation
-        self.graph.push_back(gtsam.BetweenFactorPose3(i, j, gtsam.Pose3(atb.array), noise))
-
-    def add_GPSfactor(self, utmx, utmy, utmaltitude, i):
-        utm = gtsam.Point3(utmx, utmy, utmaltitude)
-        self.graph.add(gtsam.GPSFactor(i, utm, self.GPS_NOISE))
+        self.current_estimate.insert(X(0), gtsam.Pose3())
 
     def add_initial_estimate(self, atb, k):
-        next_estimate = self.current_estimate.atPose3(k-1).compose(gtsam.Pose3(atb.array))
-        self.initial_estimate.insert(k, next_estimate)
-        self.current_estimate.insert(k, next_estimate)
+        next_estimate = self.current_estimate.atPose3(X(k-1)).compose(gtsam.Pose3(atb.array))
+        self.initial_estimate.insert(X(k), next_estimate)
+        self.current_estimate.insert(X(k), next_estimate)
+
+    def add_initial_landmark_estimate(self, atb, k, landmark_id):
+        """
+        Landmark k observed from pose i
+        """
+        landmark_estimate = self.current_estimate.atPose3(X(k)).compose(gtsam.Pose3(atb.array))
+        self.initial_estimate.insert(L(landmark_id), landmark_estimate)
+        self.current_estimate.insert(L(landmark_id), landmark_estimate)
+
+    def add_edge(self, atb, i, j, noise_type):
+        """
+        Adds edge between poses i and j
+        """
+        noise = self.select_noise(noise_type)
+        # add consecutive observation
+        self.graph.push_back(gtsam.BetweenFactorPose3(X(i), X(j), gtsam.Pose3(atb.array), noise))
+
+    def add_edge_pose_landmark(self, atb, i, j, sigmas):
+        """
+        Adds edge between poses i and j
+        """
+        noise = gtsam.noiseModel.Diagonal.Sigmas(np.array([sigmas[0]*np.pi/180,
+                                                            sigmas[1]*np.pi/180,
+                                                            sigmas[2]*np.pi/180,
+                                                            sigmas[3],
+                                                            sigmas[4],
+                                                            sigmas[5]]))
+        # add consecutive observation
+        self.graph.push_back(gtsam.BetweenFactorPose3(X(i), L(j), gtsam.Pose3(atb.array), noise))
+
+    def add_GPSfactor(self, utmx, utmy, utmaltitude, gpsnoise, i):
+        utm = gtsam.Point3(utmx, utmy, utmaltitude)
+        if gpsnoise is None:
+            self.graph.add(gtsam.GPSFactor(X(i), utm, self.GPS_NOISE))
+        else:
+            gpsnoise = gtsam.Point3(gpsnoise[0], gpsnoise[1], gpsnoise[2])
+            gpsnoise = gtsam.noiseModel.Diagonal.Sigmas(sigmas=gpsnoise)
+            self.graph.add(gtsam.GPSFactor(X(i), utm, gpsnoise))
 
     def optimize(self):
         self.isam.update(self.graph, self.initial_estimate)
@@ -182,7 +211,7 @@ class GraphSLAM():
             i += np.max([skip, 1])
         plt.pause(.01)
 
-    def plot_simple(self, plot3D = True, skip=1):
+    def plot_simple(self, plot3D=True, skip=1):
         """
         Print and plot the result simply.
         """
@@ -194,8 +223,8 @@ class GraphSLAM():
 
             i = 0
             data = []
-            while self.current_estimate.exists(i):
-                ce = self.current_estimate.atPose3(i)
+            while self.current_estimate.exists(X(i)):
+                ce = self.current_estimate.atPose3(X(i))
                 T = HomogeneousMatrix(ce.matrix())
                 data.append(T.pos())
                 i += np.max([skip, 1])
@@ -207,8 +236,8 @@ class GraphSLAM():
             plt.cla()
             i = 0
             data = []
-            while self.current_estimate.exists(i):
-                ce = self.current_estimate.atPose3(i)
+            while self.current_estimate.exists(X(i)):
+                ce = self.current_estimate.atPose3(X(i))
                 T = HomogeneousMatrix(ce.matrix())
                 data.append(T.pos())
                 i += np.max([skip, 1])
@@ -216,6 +245,65 @@ class GraphSLAM():
             plt.plot(data[:, 0], data[:, 1], '.', color='blue')
             plt.xlabel('X (m, UTM)')
             plt.ylabel('Y (m, UTM)')
+        plt.pause(0.00001)
+
+    def plot_simple_w_landmarks(self, plot3D=True, skip=1, landmarks_in_map_ids=None):
+        """
+        Print and plot the result simply.
+        """
+        if plot3D:
+            # Plot the newly updated iSAM2 inference.
+            fig = plt.figure(1)
+            axes = fig.gca(projection='3d')
+            plt.cla()
+
+            i = 0
+            data = []
+            while self.current_estimate.exists(X(i)):
+                ce = self.current_estimate.atPose3(X(i))
+                T = HomogeneousMatrix(ce.matrix())
+                data.append(T.pos())
+                i += np.max([skip, 1])
+            data = np.array(data)
+            axes.scatter(data[:, 0], data[:, 1], data[:, 2])
+
+            # j = 0
+            data = []
+            for j in landmarks_in_map_ids:
+                if self.current_estimate.exists(L(j)):
+                    ce = self.current_estimate.atPose3(L(j))
+                    T = HomogeneousMatrix(ce.matrix())
+                    data.append(T.pos())
+                    # j += np.max([skip, 1])
+            data = np.array(data)
+            plt.scatter(data[:, 0], data[:, 1], 'o', color='red')
+
+        else:
+            # Plot the newly updated iSAM2 inference.
+            fig = plt.figure(0)
+            plt.cla()
+            i = 0
+            data = []
+            while self.current_estimate.exists(X(i)):
+                ce = self.current_estimate.atPose3(X(i))
+                T = HomogeneousMatrix(ce.matrix())
+                data.append(T.pos())
+                i += np.max([skip, 1])
+            data = np.array(data)
+            plt.plot(data[:, 0], data[:, 1], '.', color='blue')
+
+            data = []
+            for j in landmarks_in_map_ids:
+                if self.current_estimate.exists(L(j)):
+                    ce = self.current_estimate.atPose3(L(j))
+                    T = HomogeneousMatrix(ce.matrix())
+                    data.append(T.pos())
+            data = np.array(data)
+            if len(data) > 0:
+                plt.plot(data[:, 0], data[:, 1], 'o', color='green')
+            plt.xlabel('X (m, UTM)')
+            plt.ylabel('Y (m, UTM)')
+
         plt.pause(0.00001)
 
     def plot_compare_GPS(self, df_gps, correspondences):

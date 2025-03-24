@@ -129,13 +129,13 @@ def run_scanmatcher(directory=None):
     # The initial T0 transformations is chosen as the identity
     T0 = HomogeneousMatrix()
     results_sm_global = compute_global_transforms(results_sm_relative, T0)
-    # plot_transforms(results_sm_global)
+    plot_transforms(results_sm_global)
     # results_sm_global = to_poses(results_sm_global)
     # Results array.  saving the results from the scanmatching process
     # caution, saving global transformation as results!
     sm_resultsarray = PosesArray()
     sm_resultsarray.from_transforms(times=lidarscanarray.get_times(), transforms=results_sm_global)
-    # sm_resultsarray = PosesArray(times=lidarscanarray.get_times(), values=results_sm_global)
+    sm_resultsarray.plot_xy()
     sm_resultsarray.save_data(directory=directory+'/robot0/scanmatcher', filename='/data.csv')
     # plot results
     sm_resultsarray.plot_xy()
