@@ -1,6 +1,7 @@
 """
 Using GTSAM in a GraphSLAM context.
 We are integrating odometry, scanmatching odometry and (if present) GPS.
+    The state X is the position and orientation frame of the robot, placed on the GPS sensor.
 
 """
 import numpy as np
@@ -71,7 +72,8 @@ def read_aruco_ids(directory, filename):
     aruco_ids = df_aruco['aruco_id'].to_numpy()
     return aruco_ids
 
-def plot_everything(odoarray, smarray, gpsarray):
+
+def plot_sensors(odoarray, smarray, gpsarray):
     plt.figure()
     odo = odoarray.get_transforms()
     sm = smarray.get_transforms()
@@ -98,26 +100,23 @@ def plot_everything(odoarray, smarray, gpsarray):
     plt.show()
 
 
-def plot_gps_graphslam(utmfactors, graphslam):
-    utmfactors = np.array(utmfactors)
-    fig = plt.figure(0)
-
-    plt.cla()
-    i = 0
-    data = []
-    while graphslam.current_estimate.exists(X(i)):
-        ce = graphslam.current_estimate.atPose3(X(i))
-        T = HomogeneousMatrix(ce.matrix())
-        data.append(T.pos())
-        i += 1
-    data = np.array(data)
-    plt.plot(utmfactors[:, 0], utmfactors[:, 1], 'o', color='red')
-    plt.plot(data[:, 0], data[:, 1], '.', color='blue')
-    plt.xlabel('X (m, UTM)')
-    plt.ylabel('Y (m, UTM)')
-    plt.pause(0.001)
-
-
+# def plot_gps_graphslam(utmfactors, graphslam):
+#     utmfactors = np.array(utmfactors)
+#     fig = plt.figure(0)
+#     plt.cla()
+#     i = 0
+#     data = []
+#     while graphslam.current_estimate.exists(X(i)):
+#         ce = graphslam.current_estimate.atPose3(X(i))
+#         T = HomogeneousMatrix(ce.matrix())
+#         data.append(T.pos())
+#         i += 1
+#     data = np.array(data)
+#     plt.plot(utmfactors[:, 0], utmfactors[:, 1], 'o', color='red')
+#     plt.plot(data[:, 0], data[:, 1], '.', color='blue')
+#     plt.xlabel('X (m, UTM)')
+#     plt.ylabel('Y (m, UTM)')
+#     plt.pause(0.001)
 
 
 def compute_relative_transformation(lidarscanarray, posesarray, i, j, T0gps):
@@ -137,8 +136,6 @@ def compute_relative_transformation(lidarscanarray, posesarray, i, j, T0gps):
     Tj = odoj.T()*T0gps
     Tij = Ti.inv()*Tj
     return Tij
-
-
 
 
 def run_graphSLAM(directory):
@@ -201,7 +198,7 @@ def run_graphSLAM(directory):
     gpsobsarray.read_data(directory=directory, filename='/robot0/gps0/data.csv')
     gpsobsarray.read_config_ref(directory=directory)
     # gpsobsarray.plot_xy()
-    plot_everything(odoarray=odoobsarray, smarray=smobsarray, gpsarray=gpsobsarray)
+    plot_sensors(odoarray=odoobsarray, smarray=smobsarray, gpsarray=gpsobsarray)
 
     # create scan Array, We are actually estimating the poses at which
     lidarscanarray = LiDARScanArray(directory=directory)
@@ -217,7 +214,9 @@ def run_graphSLAM(directory):
     graphslam = GraphSLAM(T0=T0, T0_gps=Tlidar_gps)
     graphslam.init_graph()
     base_time = lidarscanarray.get_time(0)
+    #################################################################################################
     # loop through all edges first, include relative measurements such as odometry and scanmatching
+    #################################################################################################
     for i in range(len(lidarscanarray)-1):
         # i, i+1 edges.
         print('ADDING EDGE (i, j): (', i, ',', i+1, ')')
@@ -232,13 +231,11 @@ def run_graphSLAM(directory):
         # the previous state. Using scanmatching odometry and raw odometry
         graphslam.add_edge(atb_sm, i, i + 1, 'SM')
         graphslam.add_edge(atb_odo, i, i + 1, 'ODO')
-        if i%skip_optimization == 0:
+        if i % skip_optimization == 0:
             print('GRAPHSLAM OPTIMIZE')
             print(50*'*')
             graphslam.optimize()
-            # graphslam.plot_simple(plot3D=False)
-            graphslam.plot_simple_w_landmarks(plot3D=False, landmarks_in_map_ids=landmarks_in_map_ids)
-
+            graphslam.plot_simple(plot3D=False, landmarks_ids=landmarks_in_map_ids)
     graphslam.optimize()
     graphslam.plot_simple(plot3D=False)
     #####################################################################################################
@@ -260,21 +257,17 @@ def run_graphSLAM(directory):
                 print('GRAPHSLAM OPTIMIZE')
                 print(50 * '*')
                 graphslam.optimize()
-                plot_gps_graphslam(utmfactors, graphslam)
-                graphslam.plot_simple_w_landmarks(plot3D=False, landmarks_in_map_ids=landmarks_in_map_ids)
-            # graphslam.plot_simple(plot3D=False)
-            # graphslam.optimize()
+                # plot_gps_graphslam(utmfactors, graphslam)
+                graphslam.plot_simple(plot3D=False, landmarks_ids=landmarks_in_map_ids, gps_utm_readings=utmfactors)
 
     # plot_gps_graphslam(utmfactors, graphslam)
     # graphslam.plot_simple(plot3D=False)
-    # graphslam.plot_simple_w_landmarks(plot3D=False)
     graphslam.optimize()
     # graphslam.plot_simple(plot3D=False)
-    # plot_gps_graphslam(utmfactors, graphslam)
-    graphslam.plot_simple_w_landmarks(plot3D=False, landmarks_in_map_ids=landmarks_in_map_ids)
+    graphslam.plot_simple(plot3D=False, landmarks_ids=landmarks_in_map_ids)
 
     #####################################################################################################
-    # Now add landmarks. In
+    # Now add ARUCO landmarks. In
     #####################################################################################################
     # Filter ARUCO readings.
     for j in range(len(arucoobsarray)):
@@ -304,15 +297,18 @@ def run_graphSLAM(directory):
                                              sigmas=np.array([5, 5, 5, 0.5, 0.2, 0.2]))
             landmarks_with_edges_ids.append(aruco_id)
 
+    #
+    # FINALLY, compute scanmatching between edges including ARUCO observations and poses
+    #
+
+
     print('Landmarks in map. ', landmarks_in_map_ids)
     print('Landmarks with edges. ', landmarks_with_edges_ids)
     print('FINAL OPTIMIZATION OF THE MAP')
     graphslam.optimize()
     graphslam.plot_simple(skip=1, plot3D=False)
-    graphslam.plot_simple_w_landmarks(plot3D=False, landmarks_in_map_ids=landmarks_in_map_ids)
-    # graphslam.plot2D()
-    # graphslam.plot3D()
     print('ENDED SLAM!! SAVING RESULTS!!')
+    graphslam.save_solution(directory=directory, scan_times=lidarscanarray.get_times)
 
     #
     # # create the Data Association object

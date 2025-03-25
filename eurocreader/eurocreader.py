@@ -57,8 +57,8 @@ class EurocReader():
             t = Ti.pos()
             q = Ti.Q()
             data_list.append({'timestamp': sensor_times[i],
-                         'x': t[0], 'y': t[1], 'z': t[2],
-                         'qx': q.qx, 'qy': q.qy, 'qz': q.qz, 'qw': q.qw})
+                              'x': t[0], 'y': t[1], 'z': t[2],
+                              'qx': q.qx, 'qy': q.qy, 'qz': q.qz, 'qw': q.qw})
         df = pd.DataFrame(data_list, columns=['timestamp', 'x', 'y', 'z', 'qx', 'qy', 'qz', 'qw'])
         df.to_csv(self.directory+filename, index=False, header=['#timestamp [ns]',
                                    'x', 'y', 'z',
@@ -79,8 +79,8 @@ class EurocReader():
             t = pi.position
             q = pi.quaternion
             data_list.append({'timestamp': sensor_times[i],
-                         'x': t[0], 'y': t[1], 'z': t[2],
-                         'qx': q.qx, 'qy': q.qy, 'qz': q.qz, 'qw': q.qw})
+                              'x': t[0], 'y': t[1], 'z': t[2],
+                              'qx': q.qx, 'qy': q.qy, 'qz': q.qz, 'qw': q.qw})
         df = pd.DataFrame(data_list, columns=['timestamp', 'x', 'y', 'z', 'qx', 'qy', 'qz', 'qw'])
         df.to_csv(self.directory+filename, index=False, header=['#timestamp [ns]',
                                    'x', 'y', 'z',
@@ -118,6 +118,28 @@ class EurocReader():
                 data_list.append({'i': pair[0], 'j': pair[1]})
         df = pd.DataFrame(data_list)
         df.to_csv(global_filename)
+        return df
+
+    def save_landmarks_as_csv(self, landmark_ids, transforms, filename):
+        global_filename = self.directory+filename
+        import os
+        global_directory = os.path.dirname(os.path.abspath(global_filename))
+        try:
+            os.makedirs(global_directory)
+        except OSError:
+            print("Directory exists or creation failed", global_directory)
+        data_list = []
+        for i in range(len(transforms)):
+            Ti = transforms[i]
+            t = Ti.pos()
+            q = Ti.Q()
+            data_list.append({'landmark_id': landmark_ids,
+                              'x': t[0], 'y': t[1], 'z': t[2],
+                              'qx': q.qx, 'qy': q.qy, 'qz': q.qz, 'qw': q.qw})
+        df = pd.DataFrame(data_list, columns=['landmark_id', 'x', 'y', 'z', 'qx', 'qy', 'qz', 'qw'])
+        df.to_csv(self.directory+filename, index=False, header=['landmark_id',
+                                   'x', 'y', 'z',
+                                   'qx', 'qy', 'qz', 'qw'])
         return df
 
     # def read_scan_times_numpy(self, directory='/robot0/lidar/data.csv'):
