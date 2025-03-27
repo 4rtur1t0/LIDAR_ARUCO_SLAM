@@ -61,20 +61,16 @@ class GraphSLAM():
         self.graph = gtsam.NonlinearFactorGraph()
         self.initial_estimate = gtsam.Values()
         self.current_estimate = gtsam.Values()
-
         # transforms
         self.T0 = T0
         self.T0_gps = T0_gps
-
         # noises
         self.PRIOR_NOISE = PRIOR_NOISE
         self.SM_NOISE = SM_NOISE
         self.ODO_NOISE = ODO_NOISE
         self.GPS_NOISE = gtsam.noiseModel.Diagonal.Sigmas(GPS_NOISE)
-
         # landmarks
         self.max_number_of_landmarks = max_number_of_landmarks
-
         # Solver parameters
         parameters = gtsam.ISAM2Params()
         parameters.setRelinearizeThreshold(0.1)
@@ -216,35 +212,7 @@ class GraphSLAM():
             i += np.max([skip, 1])
         plt.pause(.01)
 
-    # def plot_simple(self, plot3D=True, skip=1):
-    #     """
-    #     Print and plot the result simply.
-    #     """
-    #     i = 0
-    #     positions = []
-    #     while self.current_estimate.exists(X(i)):
-    #         ce = self.current_estimate.atPose3(X(i))
-    #         T = HomogeneousMatrix(ce.matrix())
-    #         positions.append(T.pos())
-    #         i += np.max([skip, 1])
-    #     data = np.array(positions)
-    #
-    #     if plot3D:
-    #         # Plot the newly updated iSAM2 inference.
-    #         fig = plt.figure(1)
-    #         axes = fig.gca(projection='3d')
-    #         plt.cla()
-    #         axes.scatter(data[:, 0], data[:, 1], data[:, 2])
-    #     else:
-    #         # Plot the newly updated iSAM2 inference.
-    #         fig = plt.figure(0)
-    #         plt.cla()
-    #         plt.plot(data[:, 0], data[:, 1], '.', color='blue')
-    #         plt.xlabel('X (m, UTM)')
-    #         plt.ylabel('Y (m, UTM)')
-    #     plt.pause(0.00001)
-
-    def plot_simple(self, plot3D=True, skip=1, landmarks_ids=None, gps_utm_readings=None):
+    def plot_simple(self, plot3D=True, skip=1, gps_utm_readings=None):
         """
         Print and plot the result simply (no covariances or orientations)
         """
@@ -258,14 +226,12 @@ class GraphSLAM():
             i += np.max([skip, 1])
         positions = np.array(positions)
         landmarks = []
-        for j in landmarks:
+        for j in range(self.max_number_of_landmarks):
             if self.current_estimate.exists(L(j)):
                 ce = self.current_estimate.atPose3(L(j))
                 T = HomogeneousMatrix(ce.matrix())
                 landmarks.append(T.pos())
         landmarks = np.array(landmarks)
-
-
         if plot3D:
             # Plot the newly updated iSAM2 inference.
             fig = plt.figure(1)
@@ -273,7 +239,7 @@ class GraphSLAM():
             plt.cla()
             if len(positions):
                 axes.scatter(positions[:, 0], positions[:, 1], positions[:, 2], marker='.', color='blue')
-            if landmarks_ids is not None and len(landmarks_ids) > 0:
+            if len(landmarks) > 0:
                 axes.scatter(landmarks[:, 0], landmarks[:, 1], marker='o', color='green')
             if gps_utm_readings is not None and len(gps_utm_readings) > 0:
                 gps_utm_readings = np.array(gps_utm_readings)
@@ -285,7 +251,7 @@ class GraphSLAM():
             plt.cla()
             if len(positions):
                 plt.scatter(positions[:, 0], positions[:, 1], marker='.', color='blue')
-            if landmarks_ids is not None and len(landmarks_ids) > 0:
+            if len(landmarks) > 0:
                 plt.scatter(landmarks[:, 0], landmarks[:, 1], marker='o', color='green')
             if gps_utm_readings is not None and len(gps_utm_readings) > 0:
                 gps_utm_readings = np.array(gps_utm_readings)
@@ -327,6 +293,11 @@ class GraphSLAM():
         return self.current_estimate
 
     def get_solution_transforms(self):
+        """
+        This returns the states X as a homogeneous transform matrix.
+        In this particular example, the state is represented as the position of the GPS on top of the robot.
+        Using shorthand for X(i) (state at i)
+        """
         solution_transforms = []
         i = 0
         while self.current_estimate.exists(X(i)):
@@ -338,6 +309,9 @@ class GraphSLAM():
 
     def get_solution_transforms_lidar(self):
         """
+        This returns the states X as a homogeneous transform matrix.
+        In this particular example, the state is represented as the position of the GPS on top of the robot.
+        We transform this state to the center of the LiDAR.
         Using shorthand for X(i) (state at i)
         """
         solution_transforms = []
@@ -381,6 +355,5 @@ class GraphSLAM():
                                           filename='/robot0/SLAM/solution_graphslam_gps.csv')
         euroc_read.save_transforms_as_csv(scan_times, global_transforms_lidar,
                                           filename='/robot0/SLAM/solution_graphslam_lidar.csv')
-        euroc_read.save_transforms_as_csv(scan_times, global_transforms_landmarks,
-                                          filename='/robot0/SLAM/solution_graphslam_landmarks.csv')
-        # euroc_read.save_loop_closures_as_csv(loop_closures, filename='/robot0/SLAM/loop_closures.csv')
+        euroc_read.save_landmarks_as_csv(landmark_ids=landmark_ids, transforms=global_transforms_landmarks,
+                                         filename='/robot0/SLAM/solution_graphslam_landmarks.csv')

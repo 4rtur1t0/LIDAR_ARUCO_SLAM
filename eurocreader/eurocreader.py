@@ -1,10 +1,8 @@
 import numpy as np
 import yaml
-
 from artelib.homogeneousmatrix import HomogeneousMatrix
 from artelib.quaternion import Quaternion
 import pandas as pd
-import matplotlib.pyplot as plt
 import os
 
 
@@ -45,7 +43,6 @@ class EurocReader():
 
     def save_transforms_as_csv(self, sensor_times, transforms, filename):
         global_filename = self.directory+filename
-        import os
         global_directory = os.path.dirname(os.path.abspath(global_filename))
         try:
             os.makedirs(global_directory)
@@ -67,7 +64,6 @@ class EurocReader():
 
     def save_poses_as_csv(self, sensor_times, poses, filename):
         global_filename = self.directory+filename
-        import os
         global_directory = os.path.dirname(os.path.abspath(global_filename))
         try:
             os.makedirs(global_directory)
@@ -89,7 +85,6 @@ class EurocReader():
 
     def save_sensor_times_as_csv(self, sensor_times, filename):
         global_filename = self.directory+filename
-        import os
         global_directory = os.path.dirname(os.path.abspath(global_filename))
         try:
             os.makedirs(global_directory)
@@ -104,7 +99,6 @@ class EurocReader():
 
     def save_loop_closures_as_csv(self, loop_closures, filename):
         global_filename = self.directory+filename
-        import os
         global_directory = os.path.dirname(os.path.abspath(global_filename))
         try:
             os.makedirs(global_directory)
@@ -122,7 +116,6 @@ class EurocReader():
 
     def save_landmarks_as_csv(self, landmark_ids, transforms, filename):
         global_filename = self.directory+filename
-        import os
         global_directory = os.path.dirname(os.path.abspath(global_filename))
         try:
             os.makedirs(global_directory)
@@ -133,11 +126,11 @@ class EurocReader():
             Ti = transforms[i]
             t = Ti.pos()
             q = Ti.Q()
-            data_list.append({'landmark_id': landmark_ids,
+            data_list.append({'aruco_id': landmark_ids[i],
                               'x': t[0], 'y': t[1], 'z': t[2],
                               'qx': q.qx, 'qy': q.qy, 'qz': q.qz, 'qw': q.qw})
-        df = pd.DataFrame(data_list, columns=['landmark_id', 'x', 'y', 'z', 'qx', 'qy', 'qz', 'qw'])
-        df.to_csv(self.directory+filename, index=False, header=['landmark_id',
+        df = pd.DataFrame(data_list, columns=['aruco_id', 'x', 'y', 'z', 'qx', 'qy', 'qz', 'qw'])
+        df.to_csv(self.directory+filename, index=False, header=['aruco_id',
                                    'x', 'y', 'z',
                                    'qx', 'qy', 'qz', 'qw'])
         return df

@@ -131,6 +131,23 @@ class GPSArray():
         plt.scatter(x, y)
         plt.show()
 
+    def plot_xyz(self):
+        x = []
+        y = []
+        z = []
+        for i in range(len(self.times)):
+            gpspos = self.values[i]
+            if gpspos.status >= 0:
+                utmposition = gpspos.to_utm(config_ref=self.config_ref)
+                x.append(utmposition.x)
+                y.append(utmposition.y)
+                z.append(utmposition.altitude)
+        fig = plt.figure(1)
+        axes = fig.gca(projection='3d')
+        plt.cla()
+        axes.scatter(x, y, z, marker='o', color='red')
+        plt.show()
+
 
 class GPSPosition():
     def __init__(self, latitude=None, longitude=None, altitude=None, covariance=None, status=0):

@@ -59,7 +59,7 @@ def compute_initial_relative_transformation(lidarscanarray, odoobsarray, i, j):
     return Tij
 
 
-def plot_transforms( transforms):
+def plot_transforms(transforms):
     x = []
     y = []
     for i in range(len(transforms)):
@@ -70,9 +70,6 @@ def plot_transforms( transforms):
     plt.figure()
     plt.scatter(x, y)
     plt.show()
-
-
-
 
 
 def run_scanmatcher(directory=None):
@@ -93,7 +90,8 @@ def run_scanmatcher(directory=None):
     ################################################################################################
     if directory is None:
         # INDOOR
-        directory = '/media/arvc/INTENSO/DATASETS/test_arucos/test_arucos4'
+        # directory = '/media/arvc/INTENSO/DATASETS/test_arucos/test_arucos4'
+        directory = '/media/arvc/INTENSO/DATASETS/INDOOR_OUTDOOR/IO2-2025-03-25-16-54-17'
 
     # odometry
     odoobsarray = PosesArray()
@@ -103,7 +101,6 @@ def run_scanmatcher(directory=None):
     lidarscanarray = LiDARScanArray(directory=directory)
     lidarscanarray.read_parameters()
     lidarscanarray.read_data()
-    # lidarscanarray.scan_times = lidarscanarray.scan_times[0:10]
     # remove lidars times without close odometry in time
     lidarscanarray.remove_orphan_lidars(pose_array=odoobsarray)
     lidarscanarray.add_lidar_scans()
@@ -124,13 +121,10 @@ def run_scanmatcher(directory=None):
         sm_result_i = scanmatcher.registration(i=i, j=i+1, Tij_0=Tini)
         results_sm_relative.append(sm_result_i)
         lidarscanarray.unload_pointcloud(i)
-
-    # Save the scanmatching result
-    # The initial T0 transformations is chosen as the identity
+    # Save the scanmatching result. The initial T0 transformations is chosen as the identity
     T0 = HomogeneousMatrix()
     results_sm_global = compute_global_transforms(results_sm_relative, T0)
     plot_transforms(results_sm_global)
-    # results_sm_global = to_poses(results_sm_global)
     # Results array.  saving the results from the scanmatching process
     # caution, saving global transformation as results!
     sm_resultsarray = PosesArray()

@@ -103,18 +103,18 @@ class LiDARScanArray:
     def add_lidar_scans(self, keyframe_sampling=1):
         # First: add all keyframes with the known sampling
         for i in range(0, len(self.scan_times), keyframe_sampling):
-            print("Keyframemanager: Adding Keyframe: ", i, "out of: ", len(self.scan_times), end='\r')
+            print("LidarScanArray: Adding Keyframe: ", i, "out of: ", len(self.scan_times), end='\r')
             self.add_lidar_scan(i)
 
     def add_lidar_scan(self, index):
-        print('Adding keyframe with scan_time: ', self.scan_times[index])
+        print('add_lidar_scan: adding LiDAR with scan_time: ', self.scan_times[index])
         kf = LiDARScan(directory=self.directory, scan_time=self.scan_times[index], parameters=self.parameters)
         self.lidar_scans.append(kf)
 
-    def load_pointclouds(self):
-        for i in range(0, len(self.lidar_scans)):
-            print("Keyframemanager: Loading Pointcloud: ", i, "out of: ", len(self.lidar_scans), end='\r')
-            self.lidar_scans[i].load_pointcloud()
+    # def load_pointclouds(self):
+    #     for i in range(0, len(self.lidar_scans)):
+    #         print("Keyframemanager: Loading Pointcloud: ", i, "out of: ", len(self.lidar_scans), end='\r')
+    #         self.lidar_scans[i].load_pointcloud()
 
     def load_pointcloud(self, i):
         self.lidar_scans[i].load_pointcloud()
@@ -137,46 +137,23 @@ class LiDARScanArray:
     def estimate_normals(self, index):
         self.lidar_scans[index].estimate_normals()
 
-
-    # def compute_transformation(self, i, j, Tij):
-    #     """
-    #     Compute relative transformation using different methods:
-    #     - Simple ICP.
-    #     - Two planes ICP.
-    #     - A global FPFH feature matching (which could be followed by a simple ICP)
-    #     """
-    #     # TODO: Compute inintial transformation from IMU
-    #     if self.method == 'icppointpoint':
-    #         transform = self.keyframes[i].local_registration_simple(self.keyframes[j], initial_transform=Tij.array,
-    #                                                                 option='pointpoint')
-    #     elif self.method == 'icppointplane':
-    #         transform = self.keyframes[i].local_registration_simple(self.keyframes[j], initial_transform=Tij.array,
-    #                                                                 option='pointplane')
-    #     elif self.method == 'icp2planes':
-    #         transform = self.keyframes[i].local_registration_two_planes(self.keyframes[j], initial_transform=Tij.array)
-    #     elif self.method == 'fpfh':
-    #         transform = self.keyframes[i].global_registration(self.keyframes[j])
-    #     else:
-    #         print('Unknown registration method')
-    #         transform = None
-    #     if self.show_registration_result:
-    #         self.keyframes[j].draw_registration_result(self.keyframes[i], transformation=transform.array)
-    #     return transform
-
     def draw_cloud(self, index):
         self.lidar_scans[index].draw_cloud()
 
-    def draw_all_clouds(self):
-        for i in range(len(self.lidar_scans)):
-            self.lidar_scans[i].draw_cloud()
+    # def draw_all_clouds(self):
+    #     for i in range(len(self.lidar_scans)):
+    #         self.lidar_scans[i].draw_cloud()
 
     # def visualize_keyframe(self, index):
     #     # self.keyframes[index].visualize_cloud()
     #     self.keyframes[index].draw_cloud()
-    def draw_cloud_visualizer(self, index):
-        self.lidar_scans[index].draw_cloud_visualizer()
+    # def draw_cloud_visualizer(self, index):
+    #     self.lidar_scans[index].draw_cloud_visualizer()
 
-    def draw_all_clouds_visualizer(self, sample=1):
+    def draw_all_clouds(self, sample=1):
+        """
+        Use o3d Visualizer to draw all clouds relative to the LiDAR reference frame.
+        """
         vis = o3d.visualization.Visualizer()
         vis.create_window()
         for i in range(0, len(self.scan_times), sample):
@@ -196,24 +173,20 @@ class LiDARScanArray:
             time.sleep(0.01)
         vis.destroy_window()
 
-    # kf.filter_radius_height(radii=radii, heights=heights)
-    # kf.filter_radius(radii=radii)
-    # kf.filter_height(heights=heights)
-    # kf.down_sample()
-
-    def visualize_map_online(self, global_transforms, radii=None, heights=None, clear=False):
+    def draw_map(self, global_transforms, voxel_size=None, radii=None, heights=None, clear=False, keyframe_sampling=1,
+                 terraplanist=False):
         """
         Builds map rendering updates at each frame.
 
         Caution: the map is not built, but the o3d window is in charge of storing the points
         and viewing them.
         """
-        print("VISUALIZING MAP FROM KEYFRAMES")
+        print("VISUALIZING MAP FROM LIDARSCANS")
         print('NOW, BUILD THE MAP')
-        if radii is None:
-            radii = [0.5, 35.0]
-        if heights is None:
-            heights = [-120.0, 120.0]
+        # if radii is None:
+        #     radii = [0.5, 35.0]
+        # if heights is None:
+        #     heights = [-120.0, 120.0]
 
         vis = o3d.visualization.Visualizer()
         vis.create_window()
@@ -222,19 +195,23 @@ class LiDARScanArray:
         # caution, the visualizer only adds the transformed pointcloud to
         # the window, without removing the other geometries
         # the global map (pointcloud_global) is not built.
-        for i in range(len(self.lidar_scans)):
+        for i in range(0, len(self.lidar_scans), keyframe_sampling):
             if clear:
                 vis.clear_geometries()
-            print("Keyframe: ", i, "out of: ", len(self.lidar_scans), end='\r')
+            print("LiDAR scan: ", i, "out of: ", len(self.lidar_scans), end='\r')
             kf = self.lidar_scans[i]
             kf.load_pointcloud()
-            kf.filter_radius_height(radii=radii, heights=heights)
-            # kf.filter_radius(radii=radii)
-            # kf.filter_height(heights=heights)
-            kf.down_sample()
+            kf.filter_radius(radii=radii)
+            kf.filter_height(heights=heights)
+            kf.down_sample(voxel_size=voxel_size)
             Ti = global_transforms[i]
+            # forget about height in transform
+            # if terraplanist:
+            #     Ti.array[2, 3] = 0
             # transform to global and
             pointcloud_temp = kf.transform(T=Ti.array)
+            # unload pointcloud to save memroy
+            kf.unload_pointcloud()
             # yuxtaponer los pointclouds
             # pointcloud_global = pointcloud_global + pointcloud_temp
             # vis.add_geometry(pointcloud_global, reset_bounding_box=True)
