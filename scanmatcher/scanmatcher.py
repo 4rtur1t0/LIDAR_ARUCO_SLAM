@@ -32,24 +32,6 @@ class ScanMatcher():
         else:
             transform = self.registration_icp_point_point(self.lidarscanarray[i], self.lidarscanarray[j],
                                                           initial_transform=Tij_0.array, show=show)
-
-
-        # # TODO: Compute inintial transformation from IMU
-        # if self.method == 'icppointpoint':
-        #     transform = self.keyframes[i].local_registration_simple(self.keyframes[j], initial_transform=Tij.array,
-        #                                                             option='pointpoint')
-        # elif self.method == 'icppointplane':
-        #     transform = self.keyframes[i].local_registration_simple(self.keyframes[j], initial_transform=Tij.array,
-        #                                                             option='pointplane')
-        # elif self.method == 'icp2planes':
-        #     transform = self.keyframes[i].local_registration_two_planes(self.keyframes[j], initial_transform=Tij.array)
-        # elif self.method == 'fpfh':
-        #     transform = self.keyframes[i].global_registration(self.keyframes[j])
-        # else:
-        #     print('Unknown registration method')
-        #     transform = None
-        # if self.show_registration_result:
-        #     self.keyframes[j].draw_registration_result(self.keyframes[i], transformation=transform.array)
         return transform
 
     def registration_icp_point_plane(self, one, other, initial_transform, show=False):
@@ -64,14 +46,6 @@ class ScanMatcher():
             other.draw_registration_result(one, initial_transform)
 
         print("Apply point-to-plane ICP. Local registration")
-        # selfthreshold = ICP_PARAMETERS.distance_threshold
-        # Initial version v1.0
-        # if option == 'pointpoint':
-        #     reg_p2p = o3d.pipelines.registration.registration_icp(
-        #         other.pointcloud_filtered, self.pointcloud_filtered, threshold, initial_transform,
-        #         o3d.pipelines.registration.TransformationEstimationPointToPoint())
-        # elif option == 'pointplane':
-
         reg_p2p = o3d.pipelines.registration.registration_icp(
                             other.pointcloud, one.pointcloud, self.icp_threshold, initial_transform,
                             o3d.pipelines.registration.TransformationEstimationPointToPlane())

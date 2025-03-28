@@ -40,6 +40,22 @@ class GPSArray():
         self.config_ref = parameters
         return parameters
 
+    def filter_measurements(self, max_sigma_xy=8, min_status=0):
+        filtered_values = []
+        filtered_times = []
+        for i in range(len(self.times)):
+            gps_reading = self.values[i]
+            # typically remove status -1 measurements
+            if gps_reading.status < min_status:
+                continue
+            sigma_xy = np.sum(np.sqrt(gps_reading.covariance[0:2]))
+            if sigma_xy > max_sigma_xy:
+                continue
+            filtered_values.append(self.values[i])
+            filtered_times.append(self.times[i])
+        self.values = np.array(filtered_values)
+        self.times = np.array(filtered_times)
+
     def save_data(self, directory, filename):
         euroc_read = EurocReader(directory=directory)
         euroc_read.save_transforms_as_csv(transforms=self.values,
@@ -80,6 +96,7 @@ class GPSArray():
         print('Time distances: ', (timestamp-t1)/1e9, (t2-timestamp)/1e9)
         # ensure t1 < t < t2 and the time distances are below a threshold s
         if ((timestamp - t1)/1e9 > delta_threshold_s) or ((t2-timestamp)/1e9 > delta_threshold_s):
+            print('Discard GPS!')
             return None
         if t1 <= timestamp <= t2:
             gps1 = self.values[idx1]
@@ -118,7 +135,7 @@ class GPSArray():
                                 status=status)
         return interputm
 
-    def plot_xy(self):
+    def plot_xy_utm(self):
         x = []
         y = []
         for i in range(len(self.times)):
@@ -131,7 +148,7 @@ class GPSArray():
         plt.scatter(x, y)
         plt.show()
 
-    def plot_xyz(self):
+    def plot_xyz_utm(self):
         x = []
         y = []
         z = []

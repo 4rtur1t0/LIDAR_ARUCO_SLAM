@@ -206,8 +206,8 @@ class LiDARScanArray:
             kf.down_sample(voxel_size=voxel_size)
             Ti = global_transforms[i]
             # forget about height in transform
-            # if terraplanist:
-            #     Ti.array[2, 3] = 0
+            if terraplanist:
+                Ti.array[2, 3] = 0
             # transform to global and
             pointcloud_temp = kf.transform(T=Ti.array)
             # unload pointcloud to save memroy

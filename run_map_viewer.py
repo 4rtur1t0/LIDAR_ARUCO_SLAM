@@ -9,47 +9,8 @@
          Also, the map can be saved in a series of pointclouds along with their positions, however path planning using,
          for example, PRM, may not be direct
 """
-# from eurocreader.eurocreader import EurocReader
-# from keyframemanager.keyframemanager import KeyFrameManager
-# from artelib.homogeneousmatrix import compute_homogeneous_transforms
-# import open3d as o3d
-# import matplotlib.pyplot as plt
 from map.map import Map
 
-#
-# def visualize_map_online(global_transforms, keyframe_manager, keyframe_sampling=10, radii=None, heights=None):
-#     """
-#     Builds map rendering updates at each frame.
-#
-#     Caution: the map is not built, but the o3d window is in charge of storing the points
-#     and viewing them.
-#     """
-#     if radii is None:
-#         radii = [0.5, 35.0]
-#     if heights is None:
-#         heights = [-120.0, 120.0]
-#     # caution: sample transforms
-#     sampled_global_transforms = []
-#     for i in range(0, len(global_transforms), keyframe_sampling):
-#         sampled_global_transforms.append(global_transforms[i])
-#
-#     print("COMPUTING MAP FROM KEYFRAMES")
-#     # First: add all keyframes with the known sampling
-#     keyframe_manager.add_keyframes(keyframe_sampling=keyframe_sampling)
-#     # keyframe_manager.load_pointclouds()
-#     keyframe_manager.visualize_map_online(global_transforms=sampled_global_transforms, radii=radii, heights=heights)
-#
-#
-# def build_map(global_transforms, keyframemanager, keyframe_sampling=10):
-#     """
-#     Caution: in this case, the map is built using a pointcloud and adding the points to it. This may require a great
-#     amount of memory, however the result may be saved easily
-#     """
-#     print("COMPUTING MAP FROM KEYFRAMES")
-#     keyframemanager.add_keyframes(keyframe_sampling=keyframe_sampling)
-#     keyframemanager.build_map(global_transforms=global_transforms, keyframe_sampling=keyframe_sampling)
-# from tools.plottools import plot_3D_data
-#
 # def plot_3D_with_loop_closures(df_data, loop_closures):
 #     """
 #         Print and plot the result simply. in 3D
@@ -68,83 +29,26 @@ from map.map import Map
 #         plt.plot(x, y, color='black', linewidth=3)
 #
 #     plt.show()
-#
-#
-# def view_result_map(global_transforms, directory, scan_times, keyframe_sampling, radii, heights, voxel_size):
-#     """
-#     View the map (visualize_map_online) or build it.
-#     When building it, an open3D kd-tree is obtained, which can be saved to a file (i.e.) a csv file.
-#     Also, the map can be viewed as a set of poses (i.e. x,y,z, alpha, beta, gamma) at certain timestamps associated to
-#     a scan reading at that time.
-#     """
-#     # use, for example, 1 out of 5 LiDARS to build the map
-#     # keyframe_sampling = 5
-#     # sample tran
-#     sampled_global_transforms = []
-#     for i in range(0, len(global_transforms), keyframe_sampling):
-#         sampled_global_transforms.append(global_transforms[i])
-#     # use, for example, voxel_size=0.2. Use voxel_size=None to use full resolution
-#     # voxel_size = None
-#     keyframe_manager = KeyFrameManager(directory=directory, scan_times=scan_times, voxel_size=voxel_size)
-#     # OPTIONAL: visualize resulting map
-#     keyframe_manager.add_keyframes(keyframe_sampling=keyframe_sampling)
-#     # keyframe_manager.load_pointclouds()
-#     # caution: only visualization. All points are kept by the visualization window
-#     # caution: the global transforms correspond to the scan_times
-#     keyframe_manager.visualize_map_online(global_transforms=sampled_global_transforms, radii=radii, heights=heights, clear=True)
-#     # the build map method actually returns a global O3D pointcloud
-#     pointcloud_global = keyframe_manager.build_map(global_transforms=global_transforms,
-#                                                    keyframe_sampling=keyframe_sampling, radii=radii, heights=heights)
-#     # pointcloud_global se puede guardar
 
-
-
-
-def main():
+def map_viewer():
     # Read the final transform (i.e. via GraphSLAM)
     # You may be using different estimations to build the map: i.e. scanmatching or the results from graphSLAM
     # select as desired
     directory = '/media/arvc/INTENSO/DATASETS/INDOOR_OUTDOOR/IO2-2025-03-25-16-54-17'
 
-    # Select a solution from SLAM or from a scanmatcher, for example
     # use, for example, 1 out of 5 LiDARS to build the map
-    # keyframe_sampling = 20
+    keyframe_sampling = 20
     # use, for example, voxel_size=0.2. Use voxel_size=None to use full resolution
-    # voxel_size = None
+    voxel_size = 0.2
     maplidar = Map()
     maplidar.read_data(directory=directory)
     # visualize the clouds relative to the LiDAR reference frame
     # maplidar.draw_all_clouds()
     # visualize the map on the UTM reference frame
-    maplidar.draw_map(terraplanist=False)
+    maplidar.draw_map(terraplanist=True, keyframe_sampling=keyframe_sampling, voxel_size=voxel_size)
+    # maplidar.build_map()
 
-    # # Remove by filtering max and min radius and heights
-    # # basic scan filtering to build the map (Radius_min, Radius_max, Height_min, Height_max)
-    # # CAUTION: add mor
-    # radii = [0, 35.0]
-    # heights = [-100, 5.0]
-    #
-    # # read data
-    # euroc_read = EurocReader(directory=directory)
-    # df_map_poses = euroc_read.read_csv(filename=filename)
-    # global_transforms = compute_homogeneous_transforms(df_data=df_map_poses)
-    # scan_times = df_map_poses['#timestamp [ns]'].to_numpy()
-    #
-    # loop_closures = euroc_read.read_csv(filename='/robot0/SLAM/loop_closures.csv')
-    # plot_3D_with_loop_closures(df_data=df_map_poses, loop_closures=loop_closures)
-    #
-    # # keyframe_manager = KeyFrameMan    # ager(directory=directory, scan_times=scan_times, voxel_size=voxel_size)
-    #
-    # # Either view the map and visualize or visualize it as it goes
-    # # Option 1: build the map in a open3D cloud, then render it in a single shot
-    # # build_map(global_transforms, keyframe_manager, keyframe_sampling=keyframe_sampling)
-    # # Option 2: use the open3D renderer to add points and view them.
-    # # visualize_map_online(global_transforms, keyframe_manager, keyframe_sampling=keyframe_sampling,
-    # #                      radii=radii, heights=heights)
-    # view_result_map(global_transforms=global_transforms, directory=directory,
-    #                 scan_times=scan_times, keyframe_sampling=keyframe_sampling,
-    #                 radii=radii, heights=heights, voxel_size=voxel_size)
 
 if __name__ == '__main__':
-    main()
+    map_viewer()
 

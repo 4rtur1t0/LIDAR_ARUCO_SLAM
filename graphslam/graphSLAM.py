@@ -243,7 +243,7 @@ class GraphSLAM():
                 axes.scatter(landmarks[:, 0], landmarks[:, 1], marker='o', color='green')
             if gps_utm_readings is not None and len(gps_utm_readings) > 0:
                 gps_utm_readings = np.array(gps_utm_readings)
-                axes.scatter(gps_utm_readings[:, 0], gps_utm_readings[:, 1], gps_utm_readings[:, 3], marker='o', color='red')
+                axes.scatter(gps_utm_readings[:, 0], gps_utm_readings[:, 1], gps_utm_readings[:, 2], marker='o', color='red')
             axes.legend()
         else:
             # Plot the newly updated iSAM2 inference.
@@ -258,7 +258,6 @@ class GraphSLAM():
                 plt.scatter(gps_utm_readings[:, 0], gps_utm_readings[:, 1], marker='o', color='red')
             plt.xlabel('X (m, UTM)')
             plt.ylabel('Y (m, UTM)')
-
         plt.pause(0.00001)
 
     # def plot_compare_GPS(self, df_gps, correspondences):
@@ -357,3 +356,55 @@ class GraphSLAM():
                                           filename='/robot0/SLAM/solution_graphslam_lidar.csv')
         euroc_read.save_landmarks_as_csv(landmark_ids=landmark_ids, transforms=global_transforms_landmarks,
                                          filename='/robot0/SLAM/solution_graphslam_landmarks.csv')
+
+    # def get_edges_and_poses(self):
+    #     edges = []
+    #     poses = {}
+    #     loop_closures = []
+    #     n_factors = self.graph.nrFactors()
+    #     # for factor in self.graph.at(i):
+    #     for i in range(n_factors):
+    #         factor = self.graph.at(i)
+    #         print(factor)
+    #         if isinstance(factor, gtsam.BetweenFactorPose2) or isinstance(factor, gtsam.BetweenFactorPose3):
+    #             keys = factor.keys()
+    #             edges.append((keys[0], keys[1]))  # Add edge
+    #
+    #             # Loop closure detection: Check if nodes are far apart in sequence
+    #             if abs(keys[1] - keys[0]) > 1:
+    #                 loop_closures.append((keys[0], keys[1]))
+    #
+    #     for key in self.current_estimate.keys():
+    #         if isinstance(self.current_estimate.at(key), gtsam.Pose2) or isinstance(self.current_estimate.at(key), gtsam.Pose3):
+    #             poses[key] = self.current_estimate.at(key)
+    #
+    #     return poses, edges, loop_closures
+
+    # def plot_3d_slam(self, poses, edges, loop_closures):
+    #     fig = plt.figure()
+    #     ax = fig.add_subplot(111, projection='3d')
+    #
+    #     # Extract points
+    #     xs, ys, zs = [], [], []
+    #     for key, pose in poses.items():
+    #         xs.append(pose.x())
+    #         ys.append(pose.y())
+    #         zs.append(pose.z())
+    #
+    #     ax.scatter(xs, ys, zs, c='b', marker='o')  # Plot poses
+    #
+    #     # Plot edges
+    #     for edge in edges:
+    #         p1, p2 = poses[edge[0]], poses[edge[1]]
+    #         color = 'r' if edge in loop_closures else 'k'  # Red for loop closures
+    #         ax.plot([p1.x(), p2.x()], [p1.y(), p2.y()], [p1.z(), p2.z()], color=color, linewidth=1)
+    #
+    #     ax.set_xlabel("X")
+    #     ax.set_ylabel("Y")
+    #     ax.set_zlabel("Z")
+    #     ax.set_title("3D SLAM Graph with Loop Closures")
+    #     plt.show()
+
+    # def plot_advanced(self):
+    #     poses, edges, loop_closures = self.get_edges_and_poses()
+    #     self.plot_3d_slam(poses, edges, loop_closures)

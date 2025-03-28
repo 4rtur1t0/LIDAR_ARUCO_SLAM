@@ -1,8 +1,4 @@
 import numpy as np
-# import matplotlib.pyplot as plt
-# from tools.conversions import mod_2pi
-# import gtsam
-# import gtsam.utils.plot as gtsam_plot
 from artelib.homogeneousmatrix import HomogeneousMatrix
 
 
