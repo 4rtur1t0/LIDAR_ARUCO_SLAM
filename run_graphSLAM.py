@@ -9,6 +9,9 @@ from artelib.homogeneousmatrix import HomogeneousMatrix
 from artelib.vector import Vector
 from artelib.euler import Euler
 from graphslam.loopclosing import LoopClosing
+from graphslam.loopclosing2 import LoopClosing2
+from helpers.helper_functions import process_odometry, process_gps, process_aruco_landmarks, \
+    process_triplets_scanmatching
 from lidarscanarray.lidarscanarray import LiDARScanArray
 from observations.gpsarray import GPSArray
 from observations.posesarray import PosesArray, ArucoPosesArray
@@ -18,7 +21,6 @@ from graphslam.graphSLAM import GraphSLAM
 import matplotlib.pyplot as plt
 from gtsam.symbol_shorthand import X, L
 from itertools import combinations
-
 from scanmatcher.scanmatcher import ScanMatcher
 
 
@@ -38,14 +40,6 @@ def find_options():
             euroc_path = arg
     print('Input find_options directory is: ', euroc_path)
     return euroc_path
-
-
-# def read_aruco_ids(directory, filename):
-#     euroc_read = EurocReader(directory=directory)
-#     df_aruco = euroc_read.read_csv(filename=filename)
-#     aruco_ids = df_aruco['aruco_id'].to_numpy()
-#     return aruco_ids
-
 
 def plot_sensors(odoarray, smarray, gpsarray):
     plt.figure()
@@ -75,184 +69,76 @@ def plot_sensors(odoarray, smarray, gpsarray):
     plt.pause(0.01)
 
 
-# def plot_gps_graphslam(utmfactors, graphslam):
-#     utmfactors = np.array(utmfactors)
-#     fig = plt.figure(0)
-#     plt.cla()
-#     i = 0
-#     data = []
-#     while graphslam.current_estimate.exists(X(i)):
-#         ce = graphslam.current_estimate.atPose3(X(i))
-#         T = HomogeneousMatrix(ce.matrix())
-#         data.append(T.pos())
-#         i += 1
-#     data = np.array(data)
-#     plt.plot(utmfactors[:, 0], utmfactors[:, 1], 'o', color='red')
-#     plt.plot(data[:, 0], data[:, 1], '.', color='blue')
-#     plt.xlabel('X (m, UTM)')
-#     plt.ylabel('Y (m, UTM)')
-#     plt.pause(0.001)
 
 
-def compute_relative_transformation(lidarscanarray, posesarray, i, j, T0gps):
+
+# def find_within_radius(graphslam, j_idx):
+#     candidates = []
+#     # all p
+#     combs = np.array(list(combinations(j_idx, 2)))
+#     # now find combinations with distance in the poses (2D) below threshold
+#     for pair in combs:
+#         i = pair[0]
+#         j = pair[1]
+#         posi = graphslam.current_estimate.atPose3(X(i))
+#         posj = graphslam.current_estimate.atPose3(X(j))
+#         d = distance2d(posi, posj)
+#         if d < 5:
+#             candidates.append(pair)
+#     return candidates
+
+
+# def distance2d(posi, posj):
+#     T_i = HomogeneousMatrix(posi.matrix())
+#     T_j = HomogeneousMatrix(posj.matrix())
+#     diff = T_i.pos()-T_j.pos()
+#     d = np.linalg.norm(diff[0:2])
+#     return d
+
+#
+# def find_candidate_aruco_loop_closings(graphslam, edges_landmarks):
+#     """
+#     Looks for all the seen arruco ids in the map
+#     For each ARUCO, find the poses from which the ARUCO was observed. Find a number of poses that observed
+#     the same ARUCO and are close to each other.
+#     """
+#     aruco_ids_in_map = np.unique(edges_landmarks[:, 0])
+#     global_pairs = []
+#     # iterate through each landmark
+#     for aruco_id in aruco_ids_in_map:
+#         # find the indices of the poses from which this aruco_id was observed
+#         j_idx = np.where(edges_landmarks[:, 0] == aruco_id)[0]
+#         # for each j in j_idx, find pairs that match d<dmax=5m
+#         # these pairs constitute the poses in graphslam from which the aruco_id was observed
+#         pairs = find_within_radius(graphslam, j_idx)
+#         global_pairs.append(pairs)
+#     # flatten list
+#     global_pairs = [item for sublist in global_pairs for item in sublist]
+#     global_pairs = np.array(global_pairs)
+#     return global_pairs
+
+
+
+
+
+
+def process_loop_closing_lidar(graphslam, lidarscanarray, **kwargs):
     """
-    Gets the times at the LiDAR observations at i and i+1.
-    Gets the interpolated odometry values at those times.
-    Computes an Homogeneous transform and computes the relative transformation Tij
-    The T0gps transformation is considered. We are transforming from the LiDAR odometry to the GPS odometry (p. e.
-    mounted to the front of the robot).
-    This severs as a initial estimation for the ScanMatcher
+        The ARUCO observations lead to a trajectory that is mostly correct.
+        We plan to find candidates for loop closing in terms of triplets that can be filtered
     """
-    timei = lidarscanarray.get_time(i)
-    timej = lidarscanarray.get_time(j)
-    odoi = posesarray.interpolated_pose_at_time(timestamp=timei)
-    odoj = posesarray.interpolated_pose_at_time(timestamp=timej)
-    Ti = odoi.T()*T0gps
-    Tj = odoj.T()*T0gps
-    Tij = Ti.inv()*Tj
-    return Tij
+    # Find candidates for loop_closing. Computing triplets. Find unique triplets
+    loop_closing = LoopClosing2(graphslam=graphslam, distance_backwards=7.0, radius_threshold=5.0)
+    # Compute unique triplets with scanmatching
+    triplets = loop_closing.find_feasible_triplets()
+    graphslam.plot_loop_closings(triplets)
+    # process_triplets_scanmathing
+    triplets_transforms = process_triplets_scanmatching(graphslam=graphslam, lidarscanarray=lidarscanarray, triplets=triplets)
+    # Filter out wrong scanmatchings (the transformation may be wrong)
+    triplets_transforms = loop_closing.check_triplet_transforms(graphslam=graphslam, triplet_transforms=triplets_transforms)
+    # add_loopclosing_edges()
+    # return edges
 
-
-def find_within_radius(graphslam, j_idx):
-    candidates = []
-    # all p
-    combs = np.array(list(combinations(j_idx, 2)))
-    # now find combinations with distance in the poses (2D) below threshold
-    for pair in combs:
-        i = pair[0]
-        j = pair[1]
-        posi = graphslam.current_estimate.atPose3(X(i))
-        posj = graphslam.current_estimate.atPose3(X(j))
-        d = distance2d(posi, posj)
-        if d < 5:
-            candidates.append(pair)
-    return candidates
-
-def distance2d(posi, posj):
-    T_i = HomogeneousMatrix(posi.matrix())
-    T_j = HomogeneousMatrix(posj.matrix())
-    diff = T_i.pos()-T_j.pos()
-    d = np.linalg.norm(diff[0:2])
-    return d
-
-def find_candidate_aruco_loop_closings(graphslam, edges_landmarks):
-    """
-    Looks for all the seen arruco ids in the map
-    For each ARUCO, find the poses from which the ARUCO was observed. Find a number of poses that observed
-    the same ARUCO and are close to each other.
-    """
-    aruco_ids_in_map = np.unique(edges_landmarks[:, 0])
-    global_pairs = []
-    # iterate through each landmark
-    for aruco_id in aruco_ids_in_map:
-        # find the indices of the poses from which this aruco_id was observed
-        j_idx = np.where(edges_landmarks[:, 0] == aruco_id)[0]
-        # for each j in j_idx, find pairs that match d<dmax=5m
-        # these pairs constitute the poses in graphslam from which the aruco_id was observed
-        pairs = find_within_radius(graphslam, j_idx)
-        global_pairs.append(pairs)
-    # flatten list
-    global_pairs = [item for sublist in global_pairs for item in sublist]
-    global_pairs = np.array(global_pairs)
-    return global_pairs
-
-
-def process_pairs_scanmatching(graphslam, lidarscanarray, pairs, n_pairs):
-    result = []
-    scanmatcher = ScanMatcher(lidarscanarray=lidarscanarray)
-    Tlidar_gps = graphslam.T0_gps
-    k = 0
-    # process randomly a number of pairs n_random
-    n_random = n_pairs
-    source_array = np.arange(len(pairs))
-    random_elements = np.random.choice(source_array, n_random, replace=False)
-    pairs = pairs[random_elements]
-    for pair in pairs:
-        print('Process pairs scanmatching: ', k, ' out of ', len(pairs))
-        i = pair[0]
-        j = pair[1]
-        lidarscanarray.load_pointcloud(i)
-        lidarscanarray.filter_points(i)
-        lidarscanarray.estimate_normals(i)
-        lidarscanarray.load_pointcloud(j)
-        lidarscanarray.filter_points(j)
-        lidarscanarray.estimate_normals(j)
-        # current transforms
-        Ti = HomogeneousMatrix(graphslam.current_estimate.atPose3(X(i)).matrix())
-        Tj = HomogeneousMatrix(graphslam.current_estimate.atPose3(X(j)).matrix())
-        # transform from GPS to Lidar
-        Ti = Ti * Tlidar_gps.inv()
-        Tj = Tj * Tlidar_gps.inv()
-        Tij_0 = Ti.inv() * Tj
-        Tij = scanmatcher.registration(i=i, j=j, Tij_0=Tij_0, show=False)
-        lidarscanarray.unload_pointcloud(i)
-        lidarscanarray.unload_pointcloud(j)
-        result.append([i, j, Tij])
-        k += 1
-    return result
-
-def process_odometry(graphslam, odoobsarray, smobsarray, lidarscanarray, **kwargs):
-    """
-    Add edge relations to the map
-    """
-    Tlidar_gps = kwargs.get('T0gps')
-    skip_optimization = kwargs.get('skip_optimization')
-    base_time = lidarscanarray.get_time(0)
-    edges_odo = []
-    #################################################################################################
-    # loop through all edges first, include relative measurements such as odometry and scanmatching
-    #################################################################################################
-    for i in range(len(lidarscanarray) - 1):
-        # i, i+1 edges.
-        print('ADDING EDGE (i, j): (', i, ',', i + 1, ')')
-        print('At experiment times i: ', (lidarscanarray.get_time(i) - base_time) / 1e9)
-        print('At experiment times i+1: ', (lidarscanarray.get_time(i + 1) - base_time) / 1e9)
-        atb_odo = compute_relative_transformation(lidarscanarray=lidarscanarray, posesarray=odoobsarray, i=i, j=i + 1,
-                                                  T0gps=Tlidar_gps)
-        atb_sm = compute_relative_transformation(lidarscanarray=lidarscanarray, posesarray=smobsarray, i=i, j=i + 1,
-                                                 T0gps=Tlidar_gps)
-        # create the initial estimate of node i+1 using SM
-        graphslam.add_initial_estimate(atb_sm, i + 1)
-        # graphslam.add_initial_estimate(atb_odo, i + 1)
-        # add edge observations between vertices. We are adding a binary factor between a newly observed state and
-        # the previous state. Using scanmatching odometry and raw odometry
-        graphslam.add_edge(atb_sm, i, i + 1, 'SM')
-        graphslam.add_edge(atb_odo, i, i + 1, 'ODO')
-        edges_odo.append([i, i+1])
-        if i % skip_optimization == 0:
-            print('GRAPHSLAM OPTIMIZE')
-            print(50 * '*')
-            graphslam.optimize()
-            graphslam.plot_simple(plot3D=False)
-    graphslam.optimize()
-    graphslam.plot_simple(plot3D=False)
-    graphslam.plot_simple(plot3D=True)
-    return np.array(edges_odo)
-
-
-def process_gps(graphslam, gpsobsarray, lidarscanarray, **kwargs):
-    skip_optimization = kwargs.get('skip_optimization')
-    utmfactors = []
-    for i in range(len(lidarscanarray)):
-        lidar_time = lidarscanarray.get_time(index=i)
-        # given the lidar time, find the two closest GPS observations and get an interpolated GPS value
-        gps_interp_reading = gpsobsarray.interpolated_utm_at_time(timestamp=lidar_time)
-        if gps_interp_reading is not None:
-            print('*** Adding GPS estimation at pose i: ', i)
-            utmfactors.append([gps_interp_reading.x, gps_interp_reading.y, gps_interp_reading.altitude, i])
-            graphslam.add_GPSfactor(utmx=gps_interp_reading.x, utmy=gps_interp_reading.y,
-                                    utmaltitude=gps_interp_reading.altitude,
-                                    gpsnoise=np.sqrt(gps_interp_reading.covariance),
-                                    i=i)
-        if i % skip_optimization == 0:
-            print('GRAPHSLAM OPTIMIZE')
-            print(50 * '*')
-            graphslam.optimize()
-            graphslam.plot_simple(plot3D=False, gps_utm_readings=utmfactors)
-    graphslam.optimize()
-    graphslam.plot_simple(plot3D=False, gps_utm_readings=utmfactors)
-    graphslam.plot_simple(plot3D=True, gps_utm_readings=utmfactors)
-    return utmfactors
 
 def add_loopclosing_edges(graphslam, edges_transforms, **kwargs):
     """
@@ -280,52 +166,6 @@ def add_loopclosing_edges(graphslam, edges_transforms, **kwargs):
     graphslam.optimize()
     graphslam.plot_simple(plot3D=False)
     graphslam.plot_simple(plot3D=True)
-
-
-
-def process_aruco_landmarks(graphslam, arucoobsarray, lidarscanarray, **kwargs):
-    # Filter ARUCO readings.
-    Tgps_lidar = kwargs.get('Tgps_lidar')
-    Tlidar_cam = kwargs.get('Tlidar_cam')
-    skip_optimization = kwargs.get('skip_optimization')
-    landmark_edges = []
-    for j in range(len(arucoobsarray)):
-        time_aruco = arucoobsarray.get_time(index=j)
-        arucoobs = arucoobsarray.get(j)
-        # the ARUCO observation from the camera reference system to the reference system placed on the GPS (the GPSfACTOR is directly applied)
-        # transform the observation to the reference system on the GPS
-        Tc_aruco = arucoobs.T()
-        Tgps_aruco = Tgps_lidar*Tlidar_cam*Tc_aruco
-        aruco_id = arucoobsarray.get_aruco_id(j)
-        # The observation is attached to a pose X if the time is close to that correponding to the pose.
-        # this is a simple solution, if the ARUCO observations are abundant it is highly possible to occur
-        idx_lidar_graphslam, time_lidar_graphslam = lidarscanarray.get_index_closest_to_time(timestamp=time_aruco,
-                                                                                           delta_threshold_s=0.05)
-        # if no time was found, simply continue the process
-        if idx_lidar_graphslam is None:
-            continue
-        # if the landmark does not exist, create it from pose idx_lidar_graphslam
-        # CAUTION: the landmarks is exactly numbered as the ARUCO identifier
-        # if the landmarks does not exist --> then create it. We create the landmark estimate using the index of the
-        # closest pose (idx_lidar_graphslam), the observation Tgps_aruco (expressed in the reference system of the GPS)
-        # and the aruco_id itself
-        if not graphslam.current_estimate.exists(L(aruco_id)):
-            graphslam.add_initial_landmark_estimate(Tgps_aruco, idx_lidar_graphslam, aruco_id)
-        else:
-            # if the landmark exists, create edge between pose i and landmark aruco_id
-            # sigmas stand for alpha, beta, gamma, sigmax, sigmay, sigmaz (sigmax is larger, since corresponds to Zc)
-            graphslam.add_edge_pose_landmark(atb=Tgps_aruco, i=idx_lidar_graphslam, j=aruco_id,
-                                             sigmas=np.array([5, 5, 5, 0.2, 0.1, 0.1]))
-            landmark_edges.append([aruco_id,  idx_lidar_graphslam])
-        if j % skip_optimization == 0:
-            print('GRAPHSLAM OPTIMIZE')
-            print(50 * '*')
-            graphslam.optimize()
-            graphslam.plot_simple(plot3D=False)
-    graphslam.optimize()
-    graphslam.plot_simple(plot3D=False)
-    graphslam.plot_simple(plot3D=True)
-    return np.array(landmark_edges)
 
 
 def run_graphSLAM(directory):
@@ -415,6 +255,16 @@ def run_graphSLAM(directory):
     edges_landmarks = process_aruco_landmarks(graphslam=graphslam, arucoobsarray=arucoobsarray, lidarscanarray=lidarscanarray,
                                               Tgps_lidar=Tgps_lidar, Tlidar_cam=Tlidar_cam, skip_optimization=skip_optimization)
 
+    # process loop closing lidar
+    # given
+    process_loop_closing_lidar(graphslam=graphslam, lidarscanarray=lidarscanarray,
+                                     Tgps_lidar=Tgps_lidar, Tlidar_cam=Tlidar_cam, skip_optimization=skip_optimization)
+
+
+
+
+
+
     ###################################################################################
     # FINALLY, compute scanmatching between edges including ARUCO observations and poses
     # Use ARUCO for loop closing
@@ -423,14 +273,14 @@ def run_graphSLAM(directory):
     ###################################################################################
     # graphslam.plot_advanced()
     # refine_loop_closing_with_lidar
-    candidate_pairs_scanmatching_aruco = find_candidate_aruco_loop_closings(graphslam=graphslam, edges_landmarks=edges_landmarks)
+    # candidate_pairs_scanmatching_aruco = find_candidate_aruco_loop_closings(graphslam=graphslam, edges_landmarks=edges_landmarks)
     # [i, j, Tij], actually, compute the transformations. The function computes the transforms in the lidar reference system
-    edges_transforms = process_pairs_scanmatching(graphslam=graphslam, lidarscanarray=lidarscanarray,
-                                                  pairs=candidate_pairs_scanmatching_aruco,
-                                                  n_pairs=300)
+    # edges_transforms = process_pairs_scanmatching(graphslam=graphslam, lidarscanarray=lidarscanarray,
+    #                                               pairs=candidate_pairs_scanmatching_aruco,
+    #                                               n_pairs=300)
     # add edges to map and optimize
-    add_loopclosing_edges(graphslam=graphslam, edges_transforms=edges_transforms, Tlidar_gps=Tlidar_gps,
-                          skip_optimization=20)
+    # add_loopclosing_edges(graphslam=graphslam, edges_transforms=edges_transforms, Tlidar_gps=Tlidar_gps,
+    #                       skip_optimization=20)
 
     # find candidates for loop closing for the rest of edges process them
 

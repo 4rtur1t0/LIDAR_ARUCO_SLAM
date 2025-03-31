@@ -339,6 +339,33 @@ class GraphSLAM():
             i += 1
         return solution_transforms, landmark_ids
 
+    def get_solution_positions(self):
+        positions = []
+        i = 0
+        # fill a vector with all positions
+        while self.current_estimate.exists(X(i)):
+            ce = self.current_estimate.atPose3(X(i))
+            T = HomogeneousMatrix(ce.matrix())
+            positions.append(T.pos())
+            i += 1
+        return np.array(positions)
+
+    def get_relative_solution_transform(self, i, j):
+        """
+        Get the relative transformation between solutions i and j
+        """
+        if self.current_estimate.exists(X(i)):
+            ce = self.current_estimate.atPose3(X(i))
+            Ti = HomogeneousMatrix(ce.matrix())
+        if self.current_estimate.exists(X(j)):
+            ce = self.current_estimate.atPose3(X(i))
+            Tj = HomogeneousMatrix(ce.matrix())
+        # Ti = Ti
+        # Tj = Tj
+        Tij = Ti.inv() * Tj
+        return Tij
+
+
     def save_solution(self, scan_times, directory):
         """
         Save the map.
@@ -356,6 +383,30 @@ class GraphSLAM():
                                           filename='/robot0/SLAM/solution_graphslam_lidar.csv')
         euroc_read.save_landmarks_as_csv(landmark_ids=landmark_ids, transforms=global_transforms_landmarks,
                                          filename='/robot0/SLAM/solution_graphslam_landmarks.csv')
+
+    def plot_loop_closings(self, triplets):
+        fig = plt.figure(3)
+        # ax = fig.add_subplot(111, projection='3d')
+
+        positions = self.get_solution_positions()
+        # Extract points
+        xs, ys, zs = [], [], []
+        for position in positions:
+            xs.append(position[0])
+            ys.append(position[1])
+            zs.append(position[2])
+        plt.scatter(xs, ys, c='b', marker='o')  # Plot poses
+
+        # Plot edges
+        for triplet in triplets:
+            p1, p2, p3 = positions[triplet[0]], positions[triplet[1]], positions[triplet[2]]
+            plt.plot([p1[0], p2[0]], [p1[1], p2[1]], color='g', linewidth=2)
+            plt.plot([p1[0], p3[0]], [p1[1], p3[1]], color='k', linewidth=2)
+            plt.plot([p2[0], p3[0]], [p2[1], p3[1]], color='k', linewidth=2)
+        plt.xlabel("X")
+        plt.ylabel("Y")
+        plt.title("3D SLAM Graph with Loop Closures")
+        plt.show()
 
     # def get_edges_and_poses(self):
     #     edges = []
