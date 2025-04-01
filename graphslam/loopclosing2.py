@@ -54,8 +54,7 @@ class LoopClosing2():
         tree = KDTree(positions[:, :2])  # Use (x, y) positions
         triplets_global = []
         step_index = 20
-        # min_diff_index = 500
-        # for each i find j. The index j is found randomly
+        # for each i find j. The index j is found at a distance
         for i in range(0, len(positions), step_index):
             # find an index j close to i (within r_min and r_max) and close in the sequence index
             triplet = self.find_j_k_within_radii(tree=tree, positions=positions, travel_distances=travel_distances,
@@ -84,7 +83,8 @@ class LoopClosing2():
         # find candidates for long loopclosing. Find candidates within r_lc that have travelled more than r_travelled
         r_lc = 3.0
         r_traveled = 3.0
-        num_triplets = 5
+        # num_triplets = 5
+        num_triplets = 1
         # for clarity, we ask the tree for candidates
         neighbors_in_r2 = tree.query_ball_point(positions[i, :2], r2)
         j_n = None

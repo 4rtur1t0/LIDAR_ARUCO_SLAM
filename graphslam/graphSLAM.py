@@ -20,7 +20,7 @@ odo_xyz_sigma = 0.1
 # Declare the 3D rotational standard deviations of the odometry factor's Gaussian model, in degrees.
 odo_rpy_sigma = 10
 # Declare the 3D translational standard deviations of the scanmatcher factor's Gaussian model, in meters.
-icp_xyz_sigma = 0.1
+icp_xyz_sigma = 0.05
 # Declare the 3D rotational standard deviations of the odometry factor's Gaussian model, in degrees.
 icp_rpy_sigma = 5
 # GPS noise: in UTM, x, y, height
@@ -52,23 +52,24 @@ ODO_NOISE = gtsam.noiseModel.Diagonal.Sigmas(np.array([odo_rpy_sigma*np.pi/180,
                                                             odo_xyz_sigma,
                                                             odo_xyz_sigma]))
 
-GPS_NOISE = gtsam.Point3(gps_xy_sigma, gps_xy_sigma, gps_altitude_sigma)
+# GPS_NOISE = gtsam.Point3(gps_xy_sigma, gps_xy_sigma, gps_altitude_sigma)
 
 
 class GraphSLAM():
-    def __init__(self, T0, T0_gps, max_number_of_landmarks=1000):
-        # self.current_index = 0
+    def __init__(self, T0, Tlidar_gps, Tlidar_cam, skip_optimization, max_number_of_landmarks=1000):
         self.graph = gtsam.NonlinearFactorGraph()
         self.initial_estimate = gtsam.Values()
         self.current_estimate = gtsam.Values()
         # transforms
         self.T0 = T0
-        self.T0_gps = T0_gps
+        self.Tlidar_gps = Tlidar_gps
+        self.Tgps_lidar = Tlidar_gps.inv()
+        self.Tlidar_cam = Tlidar_cam
         # noises
         self.PRIOR_NOISE = PRIOR_NOISE
         self.SM_NOISE = SM_NOISE
         self.ODO_NOISE = ODO_NOISE
-        self.GPS_NOISE = gtsam.noiseModel.Diagonal.Sigmas(GPS_NOISE)
+        self.GPS_NOISE = None #gtsam.noiseModel.Diagonal.Sigmas(GPS_NOISE)
         # landmarks
         self.max_number_of_landmarks = max_number_of_landmarks
         # Solver parameters
@@ -76,6 +77,7 @@ class GraphSLAM():
         parameters.setRelinearizeThreshold(0.1)
         parameters.relinearizeSkip = 1
         self.isam = gtsam.ISAM2(parameters)
+        self.skip_optimization = skip_optimization
 
     def init_graph(self):
         T = self.T0
@@ -260,34 +262,6 @@ class GraphSLAM():
             plt.ylabel('Y (m, UTM)')
         plt.pause(0.00001)
 
-    # def plot_compare_GPS(self, df_gps, correspondences):
-    #     """
-    #     Print and plot the result simply.
-    #     """
-    #     plt.figure(3)
-    #     i = 0
-    #     data = []
-    #     while self.current_estimate.exists(i):
-    #         ce = self.current_estimate.atPose3(i)
-    #         T = HomogeneousMatrix(ce.matrix())
-    #         data.append(T.pos())
-    #         i += 1
-    #     data = np.array(data)
-    #     # data = data[0:150]
-    #     # df_gps = df_gps[0:150]
-    #     plt.plot(data[:, 0], data[:, 1], marker='.', color='blue')
-    #     plt.plot(df_gps['x'], df_gps['y'], marker='o', color='red')
-    #     plt.legend(['GraphSLAM estimation', 'GPS UTM'])
-    #     plt.title('Correspondences (estimation, GPS)')
-    #     # plt.figure()
-    #     for c in correspondences:
-    #         x = [data[c[0], 0], df_gps['x'].iloc[c[1]]]
-    #         y = [data[c[0], 1], df_gps['y'].iloc[c[1]]]
-    #         plt.plot(x, y, color='black', linewidth=5)
-    #         # plt.show()
-    #     plt.pause(0.01)
-    #     plt.show()
-
     def get_solution(self):
         return self.current_estimate
 
@@ -318,7 +292,7 @@ class GraphSLAM():
         while self.current_estimate.exists(X(i)):
             ce = self.current_estimate.atPose3(X(i))
             T = HomogeneousMatrix(ce.matrix())
-            solution_transforms.append(T*self.T0_gps.inv())
+            solution_transforms.append(T*self.Tlidar_gps.inv())
             i += 1
         return solution_transforms
 
@@ -360,11 +334,8 @@ class GraphSLAM():
         if self.current_estimate.exists(X(j)):
             ce = self.current_estimate.atPose3(X(i))
             Tj = HomogeneousMatrix(ce.matrix())
-        # Ti = Ti
-        # Tj = Tj
         Tij = Ti.inv() * Tj
         return Tij
-
 
     def save_solution(self, scan_times, directory):
         """
@@ -386,8 +357,6 @@ class GraphSLAM():
 
     def plot_loop_closings(self, triplets):
         fig = plt.figure(3)
-        # ax = fig.add_subplot(111, projection='3d')
-
         positions = self.get_solution_positions()
         # Extract points
         xs, ys, zs = [], [], []
@@ -408,54 +377,3 @@ class GraphSLAM():
         plt.title("3D SLAM Graph with Loop Closures")
         plt.pause(0.01)
 
-    # def get_edges_and_poses(self):
-    #     edges = []
-    #     poses = {}
-    #     loop_closures = []
-    #     n_factors = self.graph.nrFactors()
-    #     # for factor in self.graph.at(i):
-    #     for i in range(n_factors):
-    #         factor = self.graph.at(i)
-    #         print(factor)
-    #         if isinstance(factor, gtsam.BetweenFactorPose2) or isinstance(factor, gtsam.BetweenFactorPose3):
-    #             keys = factor.keys()
-    #             edges.append((keys[0], keys[1]))  # Add edge
-    #
-    #             # Loop closure detection: Check if nodes are far apart in sequence
-    #             if abs(keys[1] - keys[0]) > 1:
-    #                 loop_closures.append((keys[0], keys[1]))
-    #
-    #     for key in self.current_estimate.keys():
-    #         if isinstance(self.current_estimate.at(key), gtsam.Pose2) or isinstance(self.current_estimate.at(key), gtsam.Pose3):
-    #             poses[key] = self.current_estimate.at(key)
-    #
-    #     return poses, edges, loop_closures
-
-    # def plot_3d_slam(self, poses, edges, loop_closures):
-    #     fig = plt.figure()
-    #     ax = fig.add_subplot(111, projection='3d')
-    #
-    #     # Extract points
-    #     xs, ys, zs = [], [], []
-    #     for key, pose in poses.items():
-    #         xs.append(pose.x())
-    #         ys.append(pose.y())
-    #         zs.append(pose.z())
-    #
-    #     ax.scatter(xs, ys, zs, c='b', marker='o')  # Plot poses
-    #
-    #     # Plot edges
-    #     for edge in edges:
-    #         p1, p2 = poses[edge[0]], poses[edge[1]]
-    #         color = 'r' if edge in loop_closures else 'k'  # Red for loop closures
-    #         ax.plot([p1.x(), p2.x()], [p1.y(), p2.y()], [p1.z(), p2.z()], color=color, linewidth=1)
-    #
-    #     ax.set_xlabel("X")
-    #     ax.set_ylabel("Y")
-    #     ax.set_zlabel("Z")
-    #     ax.set_title("3D SLAM Graph with Loop Closures")
-    #     plt.show()
-
-    # def plot_advanced(self):
-    #     poses, edges, loop_closures = self.get_edges_and_poses()
-    #     self.plot_3d_slam(poses, edges, loop_closures)

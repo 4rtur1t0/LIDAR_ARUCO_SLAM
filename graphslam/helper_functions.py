@@ -22,12 +22,13 @@ def compute_relative_transformation(lidarscanarray, posesarray, i, j, T0gps):
     Tij = Ti.inv()*Tj
     return Tij
 
-def process_odometry(graphslam, odoobsarray, smobsarray, lidarscanarray, **kwargs):
+
+def process_odometry(graphslam, odoobsarray, smobsarray, lidarscanarray):
     """
     Add edge relations to the map
     """
-    Tlidar_gps = kwargs.get('T0gps')
-    skip_optimization = kwargs.get('skip_optimization')
+    Tlidar_gps = graphslam.Tlidar_gps
+    skip_optimization = graphslam.skip_optimization
     base_time = lidarscanarray.get_time(0)
     edges_odo = []
     #################################################################################################
@@ -57,12 +58,12 @@ def process_odometry(graphslam, odoobsarray, smobsarray, lidarscanarray, **kwarg
             graphslam.plot_simple(plot3D=False)
     graphslam.optimize()
     graphslam.plot_simple(plot3D=False)
-    graphslam.plot_simple(plot3D=True)
+    # graphslam.plot_simple(plot3D=True)
     return np.array(edges_odo)
 
 
 def process_gps(graphslam, gpsobsarray, lidarscanarray, **kwargs):
-    skip_optimization = kwargs.get('skip_optimization')
+    skip_optimization = graphslam.skip_optimization
     utmfactors = []
     for i in range(len(lidarscanarray)):
         lidar_time = lidarscanarray.get_time(index=i)
@@ -82,16 +83,15 @@ def process_gps(graphslam, gpsobsarray, lidarscanarray, **kwargs):
             graphslam.plot_simple(plot3D=False, gps_utm_readings=utmfactors)
     graphslam.optimize()
     graphslam.plot_simple(plot3D=False, gps_utm_readings=utmfactors)
-    graphslam.plot_simple(plot3D=True, gps_utm_readings=utmfactors)
+    # graphslam.plot_simple(plot3D=True, gps_utm_readings=utmfactors)
     return utmfactors
 
 
-
-def process_aruco_landmarks(graphslam, arucoobsarray, lidarscanarray, **kwargs):
+def process_aruco_landmarks(graphslam, arucoobsarray, lidarscanarray):
     # Filter ARUCO readings.
-    Tgps_lidar = kwargs.get('Tgps_lidar')
-    Tlidar_cam = kwargs.get('Tlidar_cam')
-    skip_optimization = kwargs.get('skip_optimization')
+    Tgps_lidar = graphslam.Tgps_lidar
+    Tlidar_cam = graphslam.Tlidar_cam
+    skip_optimization = graphslam.skip_optimization
     landmark_edges = []
     for j in range(len(arucoobsarray)):
         time_aruco = arucoobsarray.get_time(index=j)
@@ -104,7 +104,7 @@ def process_aruco_landmarks(graphslam, arucoobsarray, lidarscanarray, **kwargs):
         # The observation is attached to a pose X if the time is close to that correponding to the pose.
         # this is a simple solution, if the ARUCO observations are abundant it is highly possible to occur
         idx_lidar_graphslam, time_lidar_graphslam = lidarscanarray.get_index_closest_to_time(timestamp=time_aruco,
-                                                                                           delta_threshold_s=0.05)
+                                                                                             delta_threshold_s=0.05)
         # if no time was found, simply continue the process
         if idx_lidar_graphslam is None:
             continue
@@ -128,14 +128,14 @@ def process_aruco_landmarks(graphslam, arucoobsarray, lidarscanarray, **kwargs):
             graphslam.plot_simple(plot3D=False)
     graphslam.optimize()
     graphslam.plot_simple(plot3D=False)
-    graphslam.plot_simple(plot3D=True)
+    # graphslam.plot_simple(plot3D=True)
     return np.array(landmark_edges)
 
 
 def process_pairs_scanmatching(graphslam, lidarscanarray, pairs, n_pairs):
     result = []
     scanmatcher = ScanMatcher(lidarscanarray=lidarscanarray)
-    Tlidar_gps = graphslam.T0_gps
+    Tlidar_gps = graphslam.Tlidar_gps
     k = 0
     # process randomly a number of pairs n_random
     n_random = n_pairs
@@ -168,15 +168,11 @@ def process_pairs_scanmatching(graphslam, lidarscanarray, pairs, n_pairs):
 
 
 def process_triplets_scanmatching(graphslam, lidarscanarray, triplets):
+    """
+    Actually computing the transformation for each of the triplets with indexes (i, j, k)
+    """
     result = []
-    # scanmatcher = ScanMatcher(lidarscanarray=lidarscanarray)
-    # Tlidar_gps = graphslam.T0_gps
     n = 0
-    # process randomly a number of pairs n_random
-    # n_random = n_pairs
-    # source_array = np.arange(len(pairs))
-    # random_elements = np.random.choice(source_array, n_random, replace=False)
-    # pairs = pairs[random_elements]
     for triplet in triplets:
         print('Process pairs scanmatching: ', n, ' out of ', len(triplets))
         i = triplet[0]
@@ -209,7 +205,7 @@ def process_triplets_scanmatching(graphslam, lidarscanarray, triplets):
 
 def compute_scanmathing(graphslam, lidarscanarray, i, j):
     scanmatcher = ScanMatcher(lidarscanarray=lidarscanarray)
-    Tlidar_gps = graphslam.T0_gps
+    Tlidar_gps = graphslam.Tlidar_gps
     # current transforms. Compute initial transformation
     Ti = HomogeneousMatrix(graphslam.current_estimate.atPose3(X(i)).matrix())
     Tj = HomogeneousMatrix(graphslam.current_estimate.atPose3(X(j)).matrix())

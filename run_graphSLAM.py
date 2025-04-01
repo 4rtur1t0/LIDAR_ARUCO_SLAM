@@ -8,9 +8,8 @@ import numpy as np
 from artelib.homogeneousmatrix import HomogeneousMatrix
 from artelib.vector import Vector
 from artelib.euler import Euler
-from graphslam.loopclosing import LoopClosing
 from graphslam.loopclosing2 import LoopClosing2
-from helpers.helper_functions import process_odometry, process_gps, process_aruco_landmarks, \
+from graphslam.helper_functions import process_odometry, process_gps, process_aruco_landmarks, \
     process_triplets_scanmatching
 from lidarscanarray.lidarscanarray import LiDARScanArray
 from observations.gpsarray import GPSArray
@@ -19,9 +18,6 @@ import getopt
 import sys
 from graphslam.graphSLAM import GraphSLAM
 import matplotlib.pyplot as plt
-from gtsam.symbol_shorthand import X, L
-from itertools import combinations
-from scanmatcher.scanmatcher import ScanMatcher
 
 
 def find_options():
@@ -70,7 +66,7 @@ def plot_sensors(odoarray, smarray, gpsarray):
     plt.pause(0.01)
 
 
-def process_loop_closing_lidar(graphslam, lidarscanarray, **kwargs):
+def process_loop_closing_lidar(graphslam, lidarscanarray):
     """
         Find possible loop closings. The loop closing are computed as triplets (i, j, k) where i and j are close in the
         trajectory (with a low uncertainty) and k may be far. This allows to compute three transformations using ICP:
@@ -80,6 +76,7 @@ def process_loop_closing_lidar(graphslam, lidarscanarray, **kwargs):
         It must be: Tij*Tik*Tjk.inv()=I. The three tran
         possesses a low uncertainty from the , whereas Tik and Tjk may have larger uncertainty. The observations
         The ARUCO observations lead to a trajectory that is mostly correct.
+        In this particular case, the registration between the pointclouds using a vanilla ICP algorithm are fine.
         We plan to find candidates for loop closing in terms of triplets that can be filtered
     """
     # Find candidates for loop_closing. Computing triplets. Find unique triplets
@@ -100,15 +97,13 @@ def process_loop_closing_lidar(graphslam, lidarscanarray, **kwargs):
     add_loopclosing_edges(graphslam, triplets_transforms)
 
 
-
-def add_loopclosing_edges(graphslam, triplets_transforms, **kwargs):
+def add_loopclosing_edges(graphslam, triplets_transforms):
     """
     Add edge relations to the map
     """
-    Tlidar_gps = graphslam.T0_gps
-    Tlidar_gps_inv = Tlidar_gps.inv()
-    # skip_optimization = kwargs.get('skip_optimization')
-    skip_optimization = 50
+    Tlidar_gps = graphslam.Tlidar_gps
+    Tgps_lidar = graphslam.Tgps_lidar
+    skip_optimization = graphslam.skip_optimization
     #################################################################################################
     # loop through all edges and add them to the graph
     #################################################################################################
@@ -127,9 +122,9 @@ def add_loopclosing_edges(graphslam, triplets_transforms, **kwargs):
         print('ADDING EDGE (i, j): (', i, ',', k, ')')
         # transfrom from the relative lidar reference system to the gps reference system
         # yes... this formula should be applied
-        Tij = Tlidar_gps_inv * Tij * Tlidar_gps
-        Tjk = Tlidar_gps_inv * Tjk * Tlidar_gps
-        Tik = Tlidar_gps_inv * Tik * Tlidar_gps
+        Tij = Tgps_lidar * Tij * Tlidar_gps
+        Tjk = Tgps_lidar * Tjk * Tlidar_gps
+        Tik = Tgps_lidar * Tik * Tlidar_gps
         # !! SMLC--> sm for loop closing may be noisier
         graphslam.add_edge(Tij, i, j, 'SM')
         graphslam.add_edge(Tjk, j, k, 'SM')
@@ -176,7 +171,7 @@ def run_graphSLAM(directory):
     # T LiDAR-GPS
     Tlidar_gps = HomogeneousMatrix(Vector([0.36, 0, -0.4]), Euler([0, 0, 0]))
     # T GPS - LiDAR
-    Tgps_lidar = Tlidar_gps.inv()
+    # Tgps_lidar = Tlidar_gps.inv()
     # T LiDAR-camera
     Tlidar_cam = HomogeneousMatrix(Vector([0, 0.17, 0]), Euler([0, np.pi/2, -np.pi/2]))
     # odometry
@@ -209,28 +204,32 @@ def run_graphSLAM(directory):
     # load the scans according to the times, do not load the corresponding pointclouds
     lidarscanarray.add_lidar_scans()
     # create the graphslam graph
-    graphslam = GraphSLAM(T0=T0, T0_gps=Tlidar_gps)
+    graphslam = GraphSLAM(T0=T0, Tlidar_gps=Tlidar_gps, Tlidar_cam=Tlidar_cam, skip_optimization=skip_optimization)
     graphslam.init_graph()
     #####################################################################################################
     # Process odometry information first. The function includes odometry, scanmatching. Everything
     # (odometry and scanmatching odometry is projected to the reference system on top of the GPS.
-    # edges_odo=[pose i, pose j]
+    # edges_odo=[pose i, pose j],
+    # Important, all the times are stored in the odoobsarray (Odometry observations array), (scanmatching
+    # observations array, etc)... All the observations are referred to the lidarscanarray times (the times
+    # at which the lidar was captured, since this observation cannot be easily interpolated.
     #####################################################################################################
-    edges_odo = process_odometry(graphslam=graphslam, odoobsarray=odoobsarray,
-                     smobsarray=smobsarray, lidarscanarray=lidarscanarray,
-                     T0gps=Tlidar_gps, skip_optimization=skip_optimization)
+    process_odometry(graphslam=graphslam, odoobsarray=odoobsarray, smobsarray=smobsarray, lidarscanarray=lidarscanarray)
+
     #####################################################################################################
-    # Now include gps readings as GPSFactor. Lidar times and indexes are in the same order and equivalent
+    # Now include gps readings as GPSFactor.
+    # The gps readings are interpolated given the timestamp of the lidar (the two closest times of GPS are
+    # found). The covariance is set as the maximum of the two readings. If the closest times are over a second
+    # the measurement is not included.
     #####################################################################################################
-    gps_utm_factors = process_gps(graphslam=graphslam, gpsobsarray=gpsobsarray, lidarscanarray=lidarscanarray,
-                                  skip_optimization=skip_optimization)
+    gps_utm_factors = process_gps(graphslam=graphslam, gpsobsarray=gpsobsarray, lidarscanarray=lidarscanarray)
+
     #####################################################################################################
     # Now add ARUCO landmark observations. The ARUCO are fed using the ARUCO id and ARUCO observation
     # int the camera reference system.
     # edges_landmarks = [aruco_id, pose i], aruco_id (L(j)) seen from pose i X(i)
     #####################################################################################################
-    edges_landmarks = process_aruco_landmarks(graphslam=graphslam, arucoobsarray=arucoobsarray, lidarscanarray=lidarscanarray,
-                                              Tgps_lidar=Tgps_lidar, Tlidar_cam=Tlidar_cam, skip_optimization=skip_optimization)
+    process_aruco_landmarks(graphslam=graphslam, arucoobsarray=arucoobsarray, lidarscanarray=lidarscanarray)
 
     #####################################################################################################
     # process loop closing lidar. The following observations are based only on the LiDAR computation.
@@ -244,8 +243,7 @@ def run_graphSLAM(directory):
     # a correct registration.
     # Adding these observations to the map refines
     #####################################################################################################
-    process_loop_closing_lidar(graphslam=graphslam, lidarscanarray=lidarscanarray,
-                               Tgps_lidar=Tgps_lidar, Tlidar_cam=Tlidar_cam, skip_optimization=skip_optimization)
+    process_loop_closing_lidar(graphslam=graphslam, lidarscanarray=lidarscanarray)
 
     #####################################################################################################
     # SAVE THE MAP!
