@@ -75,7 +75,7 @@ class Map():
         global_transforms = self.robotpath.get_transforms()
         self.lidarscanarray.draw_map(global_transforms=global_transforms,
                                      voxel_size=voxel_size,
-                                     radii=[1, 20],
+                                     radii=[1, 10],
                                      heights=[-2, 1.2],
                                      keyframe_sampling=keyframe_sampling,
                                      terraplanist=terraplanist)

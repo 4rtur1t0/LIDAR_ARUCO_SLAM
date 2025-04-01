@@ -169,7 +169,7 @@ def process_pairs_scanmatching(graphslam, lidarscanarray, pairs, n_pairs):
 
 def process_triplets_scanmatching(graphslam, lidarscanarray, triplets):
     result = []
-    scanmatcher = ScanMatcher(lidarscanarray=lidarscanarray)
+    # scanmatcher = ScanMatcher(lidarscanarray=lidarscanarray)
     # Tlidar_gps = graphslam.T0_gps
     n = 0
     # process randomly a number of pairs n_random
@@ -191,22 +191,18 @@ def process_triplets_scanmatching(graphslam, lidarscanarray, triplets):
         lidarscanarray.load_pointcloud(k)
         lidarscanarray.filter_points(k)
         lidarscanarray.estimate_normals(k)
+        # the function compute_scanmatchin uses the initial estimation from the current estimation and then
+        # performs scanmatching
+        # CAUTION: the result is expressed in the LiDAR reference system, since it considers
+        Tij = compute_scanmathing(graphslam=graphslam, lidarscanarray=lidarscanarray, i=i, j=j)
         Tik = compute_scanmathing(graphslam=graphslam, lidarscanarray=lidarscanarray, i=i, j=k)
         Tjk = compute_scanmathing(graphslam=graphslam, lidarscanarray=lidarscanarray, i=j, j=k)
-
-        # # current transforms
-        # Ti = HomogeneousMatrix(graphslam.current_estimate.atPose3(X(i)).matrix())
-        # Tj = HomogeneousMatrix(graphslam.current_estimate.atPose3(X(j)).matrix())
-        # # transform from GPS to Lidar
-        # Ti = Ti * Tlidar_gps.inv()
-        # Tj = Tj * Tlidar_gps.inv()
-        # Tij_0 = Ti.inv() * Tj
-        # Tij = scanmatcher.registration(i=i, j=j, Tij_0=Tij_0, show=False)
+        # remove lidar from memory
         lidarscanarray.unload_pointcloud(i)
         lidarscanarray.unload_pointcloud(j)
         lidarscanarray.unload_pointcloud(k)
         # result: the triplet and tranformations Tik, Tjk
-        result.append([i, j, k, Tik, Tjk])
+        result.append([i, j, k, Tij, Tjk, Tik])
         n += 1
     return result
 
@@ -220,6 +216,7 @@ def compute_scanmathing(graphslam, lidarscanarray, i, j):
     # transform from GPS to Lidar
     Ti = Ti * Tlidar_gps.inv()
     Tj = Tj * Tlidar_gps.inv()
+    # initial approximation from current state
     Tij_0 = Ti.inv() * Tj
     Tij = scanmatcher.registration(i=i, j=j, Tij_0=Tij_0, show=False)
     return Tij

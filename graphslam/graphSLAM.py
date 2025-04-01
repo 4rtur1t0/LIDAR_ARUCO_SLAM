@@ -406,7 +406,7 @@ class GraphSLAM():
         plt.xlabel("X")
         plt.ylabel("Y")
         plt.title("3D SLAM Graph with Loop Closures")
-        plt.show()
+        plt.pause(0.01)
 
     # def get_edges_and_poses(self):
     #     edges = []
