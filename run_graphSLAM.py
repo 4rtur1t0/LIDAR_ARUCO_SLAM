@@ -92,7 +92,7 @@ def process_loop_closing_lidar(graphslam, lidarscanarray):
     triplets_transforms = process_triplets_scanmatching(graphslam=graphslam, lidarscanarray=lidarscanarray, triplets=triplets)
     print('Checking triplets. ', len(triplets_transforms))
     # Filter out wrong scanmatchings (the transformation may be wrong). Check Tij*Tjk*Tik.inv()==I
-    triplets_transforms = loop_closing.check_triplet_transforms(graphslam=graphslam, triplet_transforms=triplets_transforms)
+    triplets_transforms = loop_closing.check_triplet_transforms(triplet_transforms=triplets_transforms)
     print('After filtering!! Adding a total of triplets:', len(triplets_transforms))
     add_loopclosing_edges(graphslam, triplets_transforms)
 

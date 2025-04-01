@@ -109,12 +109,11 @@ class LoopClosing2():
         k_n = np.random.choice(k_n, num_triplets, replace=False)
         result_triplets = []
         for k in k_n:
-            if j_n is not None and k is not None:
+            if (j_n is not None) and (k is not None):
                 result_triplets.append([i, j_n, k])
-                # return [i, j_n, k_n]
         return result_triplets
 
-    def check_triplet_transforms(self, graphslam, triplet_transforms):
+    def check_triplet_transforms(self, triplet_transforms):
         """
         A better loop closing procedure. Given the current pose and index i (current_index):
                 a) Find a number of past robot poses inside a radius_threshold.
