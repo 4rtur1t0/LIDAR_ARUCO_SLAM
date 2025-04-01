@@ -3,6 +3,8 @@ import bisect
 import numpy as np
 from artelib.homogeneousmatrix import HomogeneousMatrix
 import open3d as o3d
+
+from artelib.rotationmatrix import RotationMatrix
 from lidarscanarray.lidarscan import LiDARScan
 from eurocreader.eurocreader import EurocReader
 from tools.sampling import sample_times
@@ -183,10 +185,6 @@ class LiDARScanArray:
         """
         print("VISUALIZING MAP FROM LIDARSCANS")
         print('NOW, BUILD THE MAP')
-        # if radii is None:
-        #     radii = [0.5, 35.0]
-        # if heights is None:
-        #     heights = [-120.0, 120.0]
 
         vis = o3d.visualization.Visualizer()
         vis.create_window()
@@ -207,7 +205,11 @@ class LiDARScanArray:
             Ti = global_transforms[i]
             # forget about height in transform
             if terraplanist:
-                Ti.array[2, 3] = 0
+                pi = Ti.pos()
+                pi[2] = 0
+                Ri = Ti.R()
+                # Ri.array[0:3, 2] = np.array([0, 0, 1])
+                Ti = HomogeneousMatrix(pi, Ri)
             # transform to global and
             pointcloud_temp = kf.transform(T=Ti.array)
             # unload pointcloud to save memroy

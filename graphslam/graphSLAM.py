@@ -375,5 +375,5 @@ class GraphSLAM():
         plt.xlabel("X")
         plt.ylabel("Y")
         plt.title("3D SLAM Graph with Loop Closures")
-        plt.pause(0.01)
+        plt.pause(0.1)
 

@@ -4,6 +4,7 @@ from eurocreader.eurocreader import EurocReader
 import bisect
 import matplotlib.pyplot as plt
 from pyproj import Proj
+from config import PARAMETERS
 
 
 class GPSArray():
@@ -41,6 +42,8 @@ class GPSArray():
         return parameters
 
     def filter_measurements(self, max_sigma_xy=8, min_status=0):
+        max_sigma_xy=PARAMETERS.config.get('gps').get('max_sigma_xy')
+        min_status = PARAMETERS.config.get('gps').get('min_status')
         filtered_values = []
         filtered_times = []
         for i in range(len(self.times)):

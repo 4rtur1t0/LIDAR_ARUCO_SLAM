@@ -6,33 +6,33 @@ The Rotation Matrix class
 @Time: July 2022
 """
 import numpy as np
-# from artelib.euler import Euler
-# from artelib.tools import rot2quaternion, rot2euler
 from artelib import euler, quaternion, homogeneousmatrix, vector
 import matplotlib.pyplot as plt
 
 
 class RotationMatrix():
     def __init__(self, *args):
-        orientation = args[0]
-        self.array = None
-        # constructor from a np array
-        if isinstance(orientation, np.ndarray):
-            self.array = orientation
-        elif isinstance(orientation, list):
-            self.array = np.array(orientation)
-            # self.array = self.array[0:3, 0:3]
-        elif isinstance(orientation, int):
-            self.array = np.eye(orientation)
-        elif isinstance(orientation, euler.Euler):
-            self.array = orientation.R()
-        elif isinstance(orientation, quaternion.Quaternion):
-            self.array = orientation.R()
-        # copy constructor
-        elif isinstance(orientation, RotationMatrix):
-            self.array = orientation.toarray()
-        else:
-            raise Exception
+        if len(args) == 0:
+            self.array = np.eye(3)
+        elif len(args) > 0:
+            orientation = args[0]
+            # self.array = None
+            # constructor from a np array
+            if isinstance(orientation, np.ndarray):
+                self.array = orientation
+            elif isinstance(orientation, list):
+                self.array = np.array(orientation)
+            elif isinstance(orientation, int):
+                self.array = np.eye(orientation)
+            elif isinstance(orientation, euler.Euler):
+                self.array = orientation.R()
+            elif isinstance(orientation, quaternion.Quaternion):
+                self.array = orientation.R()
+            # copy constructor
+            elif isinstance(orientation, RotationMatrix):
+                self.array = orientation.toarray()
+            else:
+                raise Exception
 
     def __str__(self):
         return str(self.array)

@@ -148,6 +148,7 @@ class HomogeneousMatrix():
         plt.title(title)
         plt.show(block=block)
 
+
 def buildT(position, orientation):
     T = np.zeros((4, 4))
     R = orientation.R()

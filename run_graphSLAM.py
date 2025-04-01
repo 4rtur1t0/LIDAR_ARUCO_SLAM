@@ -8,9 +8,9 @@ import numpy as np
 from artelib.homogeneousmatrix import HomogeneousMatrix
 from artelib.vector import Vector
 from artelib.euler import Euler
-from graphslam.loopclosing2 import LoopClosing2
+from graphslam.loopclosing import LoopClosing
 from graphslam.helper_functions import process_odometry, process_gps, process_aruco_landmarks, \
-    process_triplets_scanmatching
+    process_triplets_scanmatching, plot_sensors, process_loop_closing_lidar
 from lidarscanarray.lidarscanarray import LiDARScanArray
 from observations.gpsarray import GPSArray
 from observations.posesarray import PosesArray, ArucoPosesArray
@@ -37,107 +37,107 @@ def find_options():
     print('Input find_options directory is: ', euroc_path)
     return euroc_path
 
-
-def plot_sensors(odoarray, smarray, gpsarray):
-    plt.figure()
-    odo = odoarray.get_transforms()
-    sm = smarray.get_transforms()
-    gps = gpsarray.get_utm_positions()
-    podo = []
-    psm = []
-    pgps = []
-    for i in range(len(odo)):
-        podo.append(odo[i].pos())
-    for i in range(len(sm)):
-        psm.append(sm[i].pos())
-    for i in range(len(gps)):
-        if gps[i].status >= 0:
-            pgps.append([gps[i].x, gps[i].y, gps[i].altitude])
-    podo = np.array(podo)
-    psm = np.array(psm)
-    pgps = np.array(pgps)
-    plt.scatter(podo[:, 0], podo[:, 1], label='odo')
-    plt.scatter(psm[:, 0], psm[:, 1], label='sm')
-    plt.scatter(pgps[:, 0], pgps[:, 1], label='gps')
-    plt.legend()
-    plt.xlabel('X (m, UTM)')
-    plt.ylabel('Y (m, UTM)')
-    # plt.show()
-    plt.pause(0.01)
-
-
-def process_loop_closing_lidar(graphslam, lidarscanarray):
-    """
-        Find possible loop closings. The loop closing are computed as triplets (i, j, k) where i and j are close in the
-        trajectory (with a low uncertainty) and k may be far. This allows to compute three transformations using ICP:
-            - Tij (using as seed Tij0, from poses)
-            - Tik (using a seed Tik0, from the estimated poses)
-            - Tjk (using a seed Tjk0, from the estimated poses)
-        It must be: Tij*Tik*Tjk.inv()=I. The three tran
-        possesses a low uncertainty from the , whereas Tik and Tjk may have larger uncertainty. The observations
-        The ARUCO observations lead to a trajectory that is mostly correct.
-        In this particular case, the registration between the pointclouds using a vanilla ICP algorithm are fine.
-        We plan to find candidates for loop closing in terms of triplets that can be filtered
-    """
-    # Find candidates for loop_closing. Computing triplets. Find unique triplets
-    loop_closing = LoopClosing2(graphslam=graphslam, distance_backwards=7.0, radius_threshold=5.0)
-    # Compute unique triplets with scanmatching
-    triplets = loop_closing.find_feasible_triplets()
-    print('FOUND triplet candidates. A total of: ', len(triplets))
-    print('COMPUTING CANDIDATES with scanmatching: ', len(triplets))
-    graphslam.plot_loop_closings(triplets)
-    # process_triplets_scanmathing: given the triplets, a scanmatchin procedure is performed to try to close the loops
-    # this process highly depends on the ability of the ICP procedure to find a consistent registration (transformation)
-    # the transformations are then filtered assuring that the triplets are consistent with Tij*Tjk*Tik.inv()==I
-    triplets_transforms = process_triplets_scanmatching(graphslam=graphslam, lidarscanarray=lidarscanarray, triplets=triplets)
-    print('Checking triplets. ', len(triplets_transforms))
-    # Filter out wrong scanmatchings (the transformation may be wrong). Check Tij*Tjk*Tik.inv()==I
-    triplets_transforms = loop_closing.check_triplet_transforms(triplet_transforms=triplets_transforms)
-    print('After filtering!! Adding a total of triplets:', len(triplets_transforms))
-    add_loopclosing_edges(graphslam, triplets_transforms)
-
-
-def add_loopclosing_edges(graphslam, triplets_transforms):
-    """
-    Add edge relations to the map
-    """
-    Tlidar_gps = graphslam.Tlidar_gps
-    Tgps_lidar = graphslam.Tgps_lidar
-    skip_optimization = graphslam.skip_optimization
-    #################################################################################################
-    # loop through all edges and add them to the graph
-    #################################################################################################
-    n = 0
-    for triplet in triplets_transforms:
-        print('ADDING TRIPLET AS EDGES TO THE GRAPH. Adding triplet, ', n, 'out of ', len(triplets_transforms))
-        # i, i+1 edges.
-        i = triplet[0]
-        j = triplet[1]
-        k = triplet[2]
-        Tij = triplet[3]
-        Tjk = triplet[4]
-        Tik = triplet[5]
-        print('ADDING EDGE (i, j): (', i, ',', j, ')')
-        print('ADDING EDGE (i, j): (', j, ',', k, ')')
-        print('ADDING EDGE (i, j): (', i, ',', k, ')')
-        # transfrom from the relative lidar reference system to the gps reference system
-        # yes... this formula should be applied
-        Tij = Tgps_lidar * Tij * Tlidar_gps
-        Tjk = Tgps_lidar * Tjk * Tlidar_gps
-        Tik = Tgps_lidar * Tik * Tlidar_gps
-        # !! SMLC--> sm for loop closing may be noisier
-        graphslam.add_edge(Tij, i, j, 'SM')
-        graphslam.add_edge(Tjk, j, k, 'SM')
-        graphslam.add_edge(Tik, i, k, 'SM')
-        if i % skip_optimization == 0:
-            print('GRAPHSLAM OPTIMIZE')
-            print(50 * '*')
-            graphslam.optimize()
-        #     graphslam.plot_simple(plot3D=False)
-        n += 1
-    graphslam.optimize()
-    graphslam.plot_simple(plot3D=False)
-    graphslam.plot_simple(plot3D=True)
+#
+# def plot_sensors(odoarray, smarray, gpsarray):
+#     plt.figure()
+#     odo = odoarray.get_transforms()
+#     sm = smarray.get_transforms()
+#     gps = gpsarray.get_utm_positions()
+#     podo = []
+#     psm = []
+#     pgps = []
+#     for i in range(len(odo)):
+#         podo.append(odo[i].pos())
+#     for i in range(len(sm)):
+#         psm.append(sm[i].pos())
+#     for i in range(len(gps)):
+#         if gps[i].status >= 0:
+#             pgps.append([gps[i].x, gps[i].y, gps[i].altitude])
+#     podo = np.array(podo)
+#     psm = np.array(psm)
+#     pgps = np.array(pgps)
+#     plt.scatter(podo[:, 0], podo[:, 1], label='odo')
+#     plt.scatter(psm[:, 0], psm[:, 1], label='sm')
+#     plt.scatter(pgps[:, 0], pgps[:, 1], label='gps')
+#     plt.legend()
+#     plt.xlabel('X (m, UTM)')
+#     plt.ylabel('Y (m, UTM)')
+#     # plt.show()
+#     plt.pause(0.01)
+#
+#
+# def process_loop_closing_lidar(graphslam, lidarscanarray):
+#     """
+#         Find possible loop closings. The loop closing are computed as triplets (i, j, k) where i and j are close in the
+#         trajectory (with a low uncertainty) and k may be far. This allows to compute three transformations using ICP:
+#             - Tij (using as seed Tij0, from poses)
+#             - Tik (using a seed Tik0, from the estimated poses)
+#             - Tjk (using a seed Tjk0, from the estimated poses)
+#         It must be: Tij*Tik*Tjk.inv()=I. The three tran
+#         possesses a low uncertainty from the , whereas Tik and Tjk may have larger uncertainty. The observations
+#         The ARUCO observations lead to a trajectory that is mostly correct.
+#         In this particular case, the registration between the pointclouds using a vanilla ICP algorithm are fine.
+#         We plan to find candidates for loop closing in terms of triplets that can be filtered
+#     """
+#     # Find candidates for loop_closing. Computing triplets. Find unique triplets
+#     loop_closing = LoopClosing2(graphslam=graphslam, distance_backwards=7.0, radius_threshold=5.0)
+#     # Compute unique triplets with scanmatching
+#     triplets = loop_closing.find_feasible_triplets()
+#     print('FOUND triplet candidates. A total of: ', len(triplets))
+#     print('COMPUTING CANDIDATES with scanmatching: ', len(triplets))
+#     graphslam.plot_loop_closings(triplets)
+#     # process_triplets_scanmathing: given the triplets, a scanmatchin procedure is performed to try to close the loops
+#     # this process highly depends on the ability of the ICP procedure to find a consistent registration (transformation)
+#     # the transformations are then filtered assuring that the triplets are consistent with Tij*Tjk*Tik.inv()==I
+#     triplets_transforms = process_triplets_scanmatching(graphslam=graphslam, lidarscanarray=lidarscanarray, triplets=triplets)
+#     print('Checking triplets. ', len(triplets_transforms))
+#     # Filter out wrong scanmatchings (the transformation may be wrong). Check Tij*Tjk*Tik.inv()==I
+#     triplets_transforms = loop_closing.check_triplet_transforms(triplet_transforms=triplets_transforms)
+#     print('After filtering!! Adding a total of triplets:', len(triplets_transforms))
+#     add_loopclosing_edges(graphslam, triplets_transforms)
+#
+#
+# def add_loopclosing_edges(graphslam, triplets_transforms):
+#     """
+#     Add edge relations to the map
+#     """
+#     Tlidar_gps = graphslam.Tlidar_gps
+#     Tgps_lidar = graphslam.Tgps_lidar
+#     skip_optimization = graphslam.skip_optimization
+#     #################################################################################################
+#     # loop through all edges and add them to the graph
+#     #################################################################################################
+#     n = 0
+#     for triplet in triplets_transforms:
+#         print('ADDING TRIPLET AS EDGES TO THE GRAPH. Adding triplet, ', n, 'out of ', len(triplets_transforms))
+#         # i, i+1 edges.
+#         i = triplet[0]
+#         j = triplet[1]
+#         k = triplet[2]
+#         Tij = triplet[3]
+#         Tjk = triplet[4]
+#         Tik = triplet[5]
+#         print('ADDING EDGE (i, j): (', i, ',', j, ')')
+#         print('ADDING EDGE (i, j): (', j, ',', k, ')')
+#         print('ADDING EDGE (i, j): (', i, ',', k, ')')
+#         # transfrom from the relative lidar reference system to the gps reference system
+#         # yes... this formula should be applied
+#         Tij = Tgps_lidar * Tij * Tlidar_gps
+#         Tjk = Tgps_lidar * Tjk * Tlidar_gps
+#         Tik = Tgps_lidar * Tik * Tlidar_gps
+#         # !! SMLC--> sm for loop closing may be noisier
+#         graphslam.add_edge(Tij, i, j, 'SM')
+#         graphslam.add_edge(Tjk, j, k, 'SM')
+#         graphslam.add_edge(Tik, i, k, 'SM')
+#         if i % skip_optimization == 0:
+#             print('GRAPHSLAM OPTIMIZE')
+#             print(50 * '*')
+#             graphslam.optimize()
+#         #     graphslam.plot_simple(plot3D=False)
+#         n += 1
+#     graphslam.optimize()
+#     graphslam.plot_simple(plot3D=False)
+#     graphslam.plot_simple(plot3D=True)
 
 
 def run_graphSLAM(directory):
@@ -163,15 +163,12 @@ def run_graphSLAM(directory):
         # directory = '/media/arvc/INTENSO/DATASETS/INDOOR_OUTDOOR/IO1-2024-05-03-09-51-52'
         # directory = '/media/arvc/INTENSO/DATASETS/test_arucos/test_arucos4'
         directory = '/media/arvc/INTENSO/DATASETS/INDOOR_OUTDOOR/IO2-2025-03-25-16-54-17'
-
     skip_optimization = 200
     # T0: Define the initial transformation (Prior for GraphSLAM)
     T0 = HomogeneousMatrix()
     # Caution: Actually, we are estimating the position and orientation of the GPS at this position at the robot.
     # T LiDAR-GPS
     Tlidar_gps = HomogeneousMatrix(Vector([0.36, 0, -0.4]), Euler([0, 0, 0]))
-    # T GPS - LiDAR
-    # Tgps_lidar = Tlidar_gps.inv()
     # T LiDAR-camera
     Tlidar_cam = HomogeneousMatrix(Vector([0, 0.17, 0]), Euler([0, np.pi/2, -np.pi/2]))
     # odometry
@@ -191,7 +188,6 @@ def run_graphSLAM(directory):
     gpsobsarray.read_config_ref(directory=directory)
     gpsobsarray.filter_measurements()
     # gpsobsarray.plot_xyz_utm()
-
     # Plot initial sensors as raw data
     plot_sensors(odoarray=odoobsarray, smarray=smobsarray, gpsarray=gpsobsarray)
     # create scan Array, We are actually estimating the poses at which

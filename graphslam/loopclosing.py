@@ -1,9 +1,13 @@
-# from artelib.homogeneousmatrix import HomogeneousMatrix
+"""
+A class
+"""
 import numpy as np
 from scipy.spatial import KDTree
 
+from config import PARAMETERS
 
-class LoopClosing2():
+
+class LoopClosing():
     def __init__(self, graphslam, distance_backwards=7, radius_threshold=5.0):
         """
         This class provides functions for loop-closing in a ICP context using LiDAR points.
@@ -53,7 +57,7 @@ class LoopClosing2():
         # Build KDTree for fast spatial queries
         tree = KDTree(positions[:, :2])  # Use (x, y) positions
         triplets_global = []
-        step_index = 20
+        step_index = PARAMETERS.config.get('loop_closing').get('step_index')
         # for each i find j. The index j is found at a distance
         for i in range(0, len(positions), step_index):
             # find an index j close to i (within r_min and r_max) and close in the sequence index
@@ -84,7 +88,7 @@ class LoopClosing2():
         r_lc = 3.0
         r_traveled = 3.0
         # num_triplets = 5
-        num_triplets = 1
+        num_triplets = 5
         # for clarity, we ask the tree for candidates
         neighbors_in_r2 = tree.query_ball_point(positions[i, :2], r2)
         j_n = None
