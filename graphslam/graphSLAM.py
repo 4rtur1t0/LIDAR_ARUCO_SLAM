@@ -8,10 +8,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from artelib.homogeneousmatrix import HomogeneousMatrix
 from gtsam.symbol_shorthand import X, L
-
-# Declare the 3D translational standard deviations of the prior factor's Gaussian model, in meters.
 from eurocreader.eurocreader import EurocReader
 
+# Declare the 3D translational standard deviations of the prior factor's Gaussian model, in meters.
 prior_xyz_sigma = 10000.0000000
 # Declare the 3D rotational standard deviations of the prior factor's Gaussian model, in degrees.
 prior_rpy_sigma = 1000.0000000
@@ -22,8 +21,8 @@ odo_rpy_sigma = 10
 # Declare the 3D translational standard deviations of the scanmatcher factor's Gaussian model, in meters.
 icp_xyz_sigma = 0.05
 # Declare the 3D rotational standard deviations of the odometry factor's Gaussian model, in degrees.
-icp_rpy_sigma = 5
-# GPS noise: in UTM, x, y, height
+icp_rpy_sigma = 3
+# GPS noise: in UTM, x, y, height. Standar errors. GPS noise can be included from the GPS readings.
 gps_xy_sigma = 2.5
 gps_altitude_sigma = 3.0
 
@@ -236,13 +235,13 @@ class GraphSLAM():
         landmarks = np.array(landmarks)
         if plot3D:
             # Plot the newly updated iSAM2 inference.
-            fig = plt.figure(1)
+            fig = plt.figure(5)
             axes = fig.gca(projection='3d')
             plt.cla()
             if len(positions):
                 axes.scatter(positions[:, 0], positions[:, 1], positions[:, 2], marker='.', color='blue')
             if len(landmarks) > 0:
-                axes.scatter(landmarks[:, 0], landmarks[:, 1], marker='o', color='green')
+                axes.scatter(landmarks[:, 0], landmarks[:, 1], landmarks[:, 2], marker='o', color='green')
             if gps_utm_readings is not None and len(gps_utm_readings) > 0:
                 gps_utm_readings = np.array(gps_utm_readings)
                 axes.scatter(gps_utm_readings[:, 0], gps_utm_readings[:, 1], gps_utm_readings[:, 2], marker='o', color='red')

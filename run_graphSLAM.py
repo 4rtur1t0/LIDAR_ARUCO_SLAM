@@ -226,7 +226,7 @@ def run_graphSLAM(directory):
     # edges_landmarks = [aruco_id, pose i], aruco_id (L(j)) seen from pose i X(i)
     #####################################################################################################
     process_aruco_landmarks(graphslam=graphslam, arucoobsarray=arucoobsarray, lidarscanarray=lidarscanarray)
-
+    # graphslam.plot_simple(plot3D=True)
     #####################################################################################################
     # process loop closing lidar. The following observations are based only on the LiDAR computation.
     # We loop through the trajectory and look for poses in a triangle. For each pose i, we look for a pose
@@ -251,6 +251,7 @@ def run_graphSLAM(directory):
     print('FINAL OPTIMIZATION OF THE MAP')
     graphslam.optimize()
     graphslam.plot_simple(skip=1, plot3D=False, gps_utm_readings=gps_utm_factors)
+    graphslam.plot_simple(skip=1, plot3D=True, gps_utm_readings=gps_utm_factors)
     print('ENDED SLAM!! SAVING RESULTS!!')
     graphslam.save_solution(directory=directory, scan_times=lidarscanarray.get_times())
 

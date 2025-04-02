@@ -2,6 +2,8 @@ import time
 import numpy as np
 from artelib.homogeneousmatrix import HomogeneousMatrix
 import open3d as o3d
+
+from config import PARAMETERS
 from lidarscanarray.lidarscan import LiDARScan
 from eurocreader.eurocreader import EurocReader
 from tools.sampling import sample_times
@@ -25,6 +27,10 @@ class ScanMatcher():
         """
         # transform = self.lidarscanarray[i].registration(self.lidarscanarray[j], initial_transform=Tij.array)
         # requires precomputation of normals
+        clouds_at_same_z = PARAMETERS.config.get('scanmatcher').get('initial_transform').get('clouds_at_same_z')
+        if clouds_at_same_z:
+            Tij_0.array[2, 3] = 0
+
         if method == 'icppointplane':
             transform = self.registration_icp_point_plane(self.lidarscanarray[i], self.lidarscanarray[j],
                                                           initial_transform=Tij_0.array, show=show)

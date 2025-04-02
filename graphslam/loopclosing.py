@@ -8,29 +8,32 @@ from config import PARAMETERS
 
 
 class LoopClosing():
-    def __init__(self, graphslam, distance_backwards=7, radius_threshold=5.0):
+    def __init__(self, graphslam):
         """
         This class provides functions for loop-closing in a ICP context using LiDAR points.
         Though called DataAssociation, it really provides ways to find out whether the computation of the
-        relative transformations between LiDAR pointclouds is correct.
+        relative transformations (registration) between LiDAR pointclouds is correct.
         Actually, data associations are performed in a lazy manner: if we find a pose near the pose i in the current
-        estimation, we will try to compute a transformation between the two pointclouds.
-        The method loop_closing simple, for a given observation at time i:
-        a) finds other robot poses j within a radius_threshold with its corresponding pointcloud.
-        b) Computes the observed transformation from i to j using both pointclouds and an ICP-based algorithm.
-        c) All observations Tij are added as edges to graphslam.
-        The method loop_closing triangle is far more accurate, for a given observation at time i:
-        a) finds other robot poses j within a radius_threshold with its corresponding pointcloud.
-        b) finds triplets of poses (i, j1, j2) considering that the indexes j1 and j2 must be close (i.e. close in time).
-           Also, the indexes j1, j2 be separated a distance d1 in space and be below a distance d2.
-        c) For each triplet, it must be: Tij1*Tj1j2*Tj2i=Tii=I, the identity. Due to errors, I must be different from the identity
-        I is then converted to I.pos() and I.euler() and checked to find p = 0, and abg=0 approximately. If the transformation
-        differs from I, the observations are discarded. On the contrary, both Tij1 and Tij2 are added to the graph.
+        estimation, we will try to compute a transformation between the two pointclouds. A correct registration using
+        a vanilla ICP algorithm depends upon an initial transformation between the two pointclouds. If this initial
+        transformation is very noisy, the final estimation may be incorrect. In order to avoid incorrect transformation,
+         we have implemented the following process. The method is called loop_closing_triangle proposes that, for a
+         given observation at time i:
+        a) finds other robot pose j within r1 and r2 radii in terms of travelled distance. In this way, j is close to i
+        and possesses a low uncertainty. The tranformation Tij is computed
+        b) then looks for a different pose k within radius r3 (a loop closing radidus) that, as well is far in terms of
+        travel distance. The radius r3 absorbs large error in loop closing.
+        c) As a result, we have triplets of poses (i, j, k) considering that the indexes i and j must be close
+        (i.e. close in time) and k is far. The transformations Tjk and Tik are computed.
+        c) For each triplet, it must be: Tij*Tjk*Tik.inv()=Tii=I, the identity. Due to errors, it may be different
+        from the identity. The resulting matrix I is then converted to I.pos() and I.euler() and checked to find p = 0,
+        and abg=0 approximately. If the transformation differs largely from I, the observations are discarded.
+        If Tii = I approximately, we add to the graph Tij Tjk and Tik.
+
+        Care must be taken, since the pose estimations in graphslam estimate the position/orientation of the GPS (which
+        differs from the location of the LiDAR).
         """
         self.graphslam = graphslam
-        # look for data associations that are delta_index back in time
-        self.distance_backwards = distance_backwards
-        self.radius_threshold = radius_threshold
         self.positions = None
 
     def find_feasible_triplets(self):
@@ -44,22 +47,31 @@ class LoopClosing():
 
         Args:
             poses (np.ndarray): Nx3 or Nx2 array of poses (x, y, theta optional).
-            radius (float): Distance threshold for potential loop closures.
-            min_distance (float): Minimum travel distance before considering closure.
+            parameters in parameters.yaml (radii to find candidates).
 
         Returns:
-            dict: Dictionary where keys are indices and values are lists of loop closure candidates.
+            list: A list of triplets (i, j, k).
         """
         positions = self.graphslam.get_solution_positions()
         if len(positions) == 0:
             return None
+        # precompute travel distances to easily find the travel distance between nodes i and j in the graph (in xy position)
         travel_distances = self.compute_travel_distances(positions)
-        # Build KDTree for fast spatial queries
+        # sample i at travel distances
+        d_sample_i = PARAMETERS.config.get('loop_closing').get('d_sample_i') # 5.0 # meters
+        print('SAMPLING i poses with a relative distance of d_sample_i: ', d_sample_i)
+        sampled_i = [0]
+        for i in range(1, len(positions)):
+            d_rel = travel_distances[i]-travel_distances[sampled_i[-1]]
+            if d_rel > d_sample_i:
+                sampled_i.append(i)
+        print('Sampled for loop closing at a total of i poses: ', len(sampled_i))
+        # Build KDTree for fast spatial queries (for loop closing)
         tree = KDTree(positions[:, :2])  # Use (x, y) positions
         triplets_global = []
-        step_index = PARAMETERS.config.get('loop_closing').get('step_index')
         # for each i find j. The index j is found at a distance
-        for i in range(0, len(positions), step_index):
+        # for i in range(0, len(positions), step_index):
+        for i in sampled_i:
             # find an index j close to i (within r_min and r_max) and close in the sequence index
             triplet = self.find_j_k_within_radii(tree=tree, positions=positions, travel_distances=travel_distances,
                                                  i=i)
@@ -78,25 +90,34 @@ class LoopClosing():
 
     def find_j_k_within_radii(self, tree, positions, travel_distances, i):
         """
-        Finds a candidate at a distance  r_min < d < r_max
-        It should be at a close index, so that the error in poses from i to j is low
+        Finds a candidate j at a distance  r_close1 < d < r_close2
+        It should be at a close index, so that the error in poses from i to j is low (id est, low uncertainty).
+        The first j is selected for this purpose.
+        Also find a candidate k that both meets:
+        - r_lc (radius for loop closing): may be large, depending on the expected uncertainty in loop closing.
+        - r_traveled: may be large, in order to select large loop closings (well separated in time). However, small
+        loop closings may be also beneficial.
+        If different k meet these requirements, generate aThe number of triplets
         """
         # find candidates for j within r_close. The index j must be
-        r1 = 0.7
-        r2 = 1.5 # this is the actual loop closing distance
-        # find candidates for long loopclosing. Find candidates within r_lc that have travelled more than r_travelled
-        r_lc = 3.0
-        r_traveled = 3.0
+        r_close1 = PARAMETERS.config.get('loop_closing').get('r_close1') #0.7
+        r_close2 = PARAMETERS.config.get('loop_closing').get('r_close2') #1.5 # this is the actual loop closing distance
+        # find candidates for long loopclosing. Find candidates within r_lc that have travelled more than r_lc_travel_distance
+        # if r_lc > r_lc --> there exists the possibility to include small loop closings
+        # if r_lc_travel_distance > r_lc, then only large loop closings will be included
+        r_lc = PARAMETERS.config.get('loop_closing').get('r_lc') # 3.5
+        r_lc_travel_distance = PARAMETERS.config.get('loop_closing').get('r_lc_travel_distance') #3.0
         # num_triplets = 5
-        num_triplets = 5
+        num_triplets = PARAMETERS.config.get('loop_closing').get('num_triplets')
         # for clarity, we ask the tree for candidates
-        neighbors_in_r2 = tree.query_ball_point(positions[i, :2], r2)
+        # neighbors_in_r2 = tree.query_ball_point(positions[i, :2], r_close2)
         j_n = None
         # select only a first close candidate j within a distance of r1 and travel distance within r1 and r2
         # this candidate should be close in the sequence of observations (odometry, sm)
-        for j in neighbors_in_r2:
+        # start at i and find index j that meet the criteria
+        for j in range(i+1, len(positions)):
             d = travel_distances[j] - travel_distances[i]
-            if j > i and (d > r1) and (d < r2):
+            if r_close1 < d < r_close2: #(d > r_close1) and (d < r_close2):
                 j_n = j
                 break
         # select another candidate with a travel distance larger than r3
@@ -105,7 +126,7 @@ class LoopClosing():
         # obtain k for a long travel distance (try to perform long loop closings)
         for k in neighbors_in_r_lc:
             d = travel_distances[k] - travel_distances[i]
-            if k > i and (d > r_traveled):
+            if k > i and (d > r_lc_travel_distance):
                 k_n.append(k)
         num_triplets = min(num_triplets, len(k_n))
         # this is a uniform choice. IDEA: could try to include longer loop closings with more probability.

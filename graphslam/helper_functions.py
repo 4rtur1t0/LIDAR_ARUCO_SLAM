@@ -271,7 +271,7 @@ def process_loop_closing_lidar(graphslam, lidarscanarray):
         We plan to find candidates for loop closing in terms of triplets that can be filtered
     """
     # Find candidates for loop_closing. Computing triplets. Find unique triplets
-    loop_closing = LoopClosing(graphslam=graphslam, distance_backwards=7.0, radius_threshold=5.0)
+    loop_closing = LoopClosing(graphslam=graphslam)
     # Compute unique triplets with scanmatching
     triplets = loop_closing.find_feasible_triplets()
     print('FOUND triplet candidates. A total of: ', len(triplets))
@@ -285,6 +285,7 @@ def process_loop_closing_lidar(graphslam, lidarscanarray):
     # Filter out wrong scanmatchings (the transformation may be wrong). Check Tij*Tjk*Tik.inv()==I
     triplets_transforms = loop_closing.check_triplet_transforms(triplet_transforms=triplets_transforms)
     print('After filtering!! Adding a total of triplets:', len(triplets_transforms))
+    graphslam.plot_loop_closings(triplets_transforms)
     add_loopclosing_edges(graphslam, triplets_transforms)
 
 
@@ -328,4 +329,4 @@ def add_loopclosing_edges(graphslam, triplets_transforms):
         n += 1
     graphslam.optimize()
     graphslam.plot_simple(plot3D=False)
-    graphslam.plot_simple(plot3D=True)
+    # graphslam.plot_simple(plot3D=True)
