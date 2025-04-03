@@ -101,9 +101,9 @@ def plot_quaternion_data(df_data, title='Quaternion data to Euler', annotate_tim
         qy = df_data['qy'][i]
         qz = df_data['qz'][i]
         qw = df_data['qw'][i]
-        q = [qw, qx, qy, qz]
-        Q = Quaternion(q)
-        th = Q.Euler()[0]
+        # q = [qw, qx, qy, qz]
+        Q = Quaternion(qx=qx, qy=qy, qz=qz, qw=qw)
+        th = Q.euler()[0]
         th.abg = th.abg + np.array([0, 0, -2.5])
         th.abg[2] = np.arctan2(np.sin(th.abg[2]), np.cos(th.abg[2]))
         eul.append(th.abg)
@@ -262,8 +262,8 @@ def plot_gps_OSM(df_gps, expand=0.001, save_fig=False):
     ax.yaxis.set_visible(False)
     plotter = tilemapbase.Plotter(extent, tiles, height=600)
     plotter.plot(ax, tiles, alpha=0.8)
-    ax.plot(trip_projected.x, trip_projected.y, color='blue', linewidth=1)
-    # ax.scatter(trip_projected.x, trip_projected.y, color='blue')
+    # ax.plot(trip_projected.x, trip_projected.y, color='blue', linewidth=1)
+    ax.scatter(trip_projected.x, trip_projected.y, color='blue', marker='.', s=1)
     plt.axis('off')
     plt.show(block=True)
     if save_fig:

@@ -29,6 +29,9 @@ def map_viewer():
     # visualize the map on the UTM reference frame
     maplidar.draw_map(terraplanist=False, keyframe_sampling=keyframe_sampling, voxel_size=voxel_size)
     # maplidar.build_map()
+    # maplidar.plot_solution_utm_OSM()
+    # maplidar.plot_test()
+
 
 
 if __name__ == '__main__':

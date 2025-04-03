@@ -38,9 +38,9 @@ def view_gps_data(directory):
         df_gps = gps2utm(df_gps, latlonref)
         # filter data (NaN and 0)
         df_gps = filter_gps(df_gps)
-        plot_gps_points(df_gps=df_gps, annotate_index=True)
-        plot_gps_points(df_gps=df_gps, annotate_error=True)
-        plot_utm_points(df_gps=df_gps, annotate_error=True)
+        # plot_gps_points(df_gps=df_gps, annotate_index=True)
+        # plot_gps_points(df_gps=df_gps, annotate_error=True)
+        # plot_utm_points(df_gps=df_gps, annotate_error=True)
         plot_gps_OSM(df_gps=df_gps, save_fig=True, expand=0.001)
 
     except FileNotFoundError:
@@ -71,13 +71,15 @@ if __name__ == "__main__":
     # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O3-2024-03-18-17-11-17'
     # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O4-2024-04-22-13-27-47'
     # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O5-2024-04-24-12-47-35'
-    directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O6-2024-04-10-11-09-24'
+    # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O6-2024-04-10-11-09-24'
     # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O7-2024-04-22-13-45-50'
     # directory = '/media/arvc/INTENSO/DATASETS/OUTDOOR/O8-2024-04-24-13-05-16'
     # directory = '/media/arvc/INTENSO/DATASETS/INDOOR_OUTDOOR/IO1-2024-05-03-09-51-52'
+    directory = '/media/arvc/INTENSO/DATASETS/INDOOR_OUTDOOR/IO2-2025-03-25-16-54-17'
+
 
     # uncomment as necessary
-    view_IMU_data(directory=directory)
-    view_odo_data(directory=directory)
+    # view_IMU_data(directory=directory)
+    # view_odo_data(directory=directory)
     # view_odo_orientation_data(directory=directory)
     view_gps_data(directory=directory)

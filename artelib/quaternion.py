@@ -8,12 +8,10 @@ The Quaternion orientation class
 """
 import numpy as np
 from artelib import euler, rotationmatrix, homogeneousmatrix
-# from artelib import quaternion2rot, q2euler
 
 
 class Quaternion():
     def __init__(self, qx, qy, qz, qw):
-       # self.array = np.array(array)
         self.qx = qx
         self.qy = qy
         self.qz = qz
@@ -115,6 +113,7 @@ class Quaternion():
         R[2, 0] = 2 * qx * qz - 2 * qy * qw
         R[2, 1] = 2 * qy * qz + 2 * qx * qw
         R[2, 2] = 1 - 2 * qx ** 2 - 2 * qy ** 2
+        R = rotationmatrix.RotationMatrix(R)
         return R
 
     def q2euler(self):
