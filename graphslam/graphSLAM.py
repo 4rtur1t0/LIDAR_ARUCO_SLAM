@@ -352,7 +352,7 @@ class GraphSLAM():
         euroc_read.save_transforms_as_csv(scan_times, global_transforms_lidar,
                                           filename='/robot0/SLAM/solution_graphslam_lidar.csv')
         euroc_read.save_landmarks_as_csv(landmark_ids=landmark_ids, transforms=global_transforms_landmarks,
-                                         filename='/robot0/SLAM/solution_graphslam_landmarks.csv')
+                                         filename='/robot0/SLAM/solution_graphslam_aruco_landmarks.csv')
 
     def plot_loop_closings(self, triplets):
         fig = plt.figure(3)
